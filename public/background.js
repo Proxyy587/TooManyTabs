@@ -1,19 +1,19 @@
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: 'display-tabs',
-    title: 'Display Too Many Tabs',
+    title: 'Display TooManyTabs',
     contexts: ['page']
   });
 
   chrome.contextMenus.create({
     id: 'save-current-tabs',
-    title: 'Save All Tabs to Too Many Tabs',
+    title: 'Save All Tabs to TooManyTabs',
     contexts: ['page']
   });
 
   chrome.contextMenus.create({
     id: 'save-this-tab',
-    title: 'Save This Tab to Too Many Tabs',
+    title: 'Save This Tab to TooManyTabs',
     contexts: ['page']
   });
 });

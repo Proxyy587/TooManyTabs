@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Too Many Tabs",
+  "name": "TooManyTabs",
   "version": "1.0.0",
   "description": "Save all open tabs into a list, just like OneTab",
   "permissions": [
