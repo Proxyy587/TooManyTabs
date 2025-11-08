@@ -1,8 +1,13 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+// import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Settings as SettingsIcon, Search, Trash2, RotateCcw, Copy, Save, Layers } from "lucide-react"
 import Settings from "./Settings"
-import "./index.css"
 
 interface Tab {
   id: string
@@ -36,6 +41,8 @@ const defaultTheme: ThemeSettings = {
 }
 
 declare const chrome: typeof globalThis.chrome
+
+// Mock Settings component
 
 export default function App() {
   const [currentTabs, setCurrentTabs] = useState<Tab[]>([])
@@ -220,355 +227,257 @@ export default function App() {
   }
 
   return (
-    <>
-      <div
-        className="min-h-screen flex flex-col"
-        style={{
-          backgroundColor: theme.backgroundColor,
-          color: theme.textColor,
-        }}
-      >
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white ">
+      <div className="w-full mx-auto px-6 py-8">
         {/* Header */}
-        <header className="border-b" style={{ borderColor: "rgba(255, 255, 255, 0.08)" }}>
-          <div className="max-w-7xl mx-auto px-6 py-8 flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <header className="mb-12">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <Layers className="w-6 h-6 text-white" />
+              </div>
               <div>
-                <h1 className="text-4xl font-light tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
                   TooManyTabs
                 </h1>
-                <p className="text-xs mt-1" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-                  Save and organize your browser tabs
-                </p>
+                <p className="text-slate-400 text-sm">Organize your browsing chaos</p>
               </div>
             </div>
-            <button
+            <Button 
+              variant="ghost" 
+              size="icon"
               onClick={() => setShowSettings(true)}
-              className="p-3 hover:bg-white/5 rounded-lg transition-all duration-200 group"
-              title="Settings"
+              className="rounded-xl hover:bg-slate-800/50 transition-all"
             >
-              <svg
-                className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-            </button>
+              <SettingsIcon className="w-5 h-5 text-slate-400" />
+            </Button>
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
+        <main className="space-y-6">
+          {/* Current Tabs Card */}
           {currentTabs.length > 0 && (
-            <div
-              className="mb-12 p-6 rounded-xl border backdrop-blur transition-all duration-300 hover:border-white/15"
-              style={{
-                backgroundColor: "rgba(255, 255, 255, 0.04)",
-                borderColor: "rgba(255, 255, 255, 0.1)",
-              }}
-            >
-              <div className="flex items-center justify-between gap-6">
-                <div className="flex-1">
-                  <p className="text-lg font-light mb-2">
-                    {currentTabs.length} tab{currentTabs.length !== 1 ? "s" : ""} open
-                  </p>
-                  <p className="text-sm" style={{ color: "rgba(255, 255, 255, 0.6)" }}>
-                    Save them to free up memory
-                  </p>
+            <Card className="border-slate-800 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl shadow-2xl overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5" />
+              <CardHeader className="relative pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                    <Layers className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl font-semibold text-white">
+                      {currentTabs.length} tab{currentTabs.length !== 1 ? "s" : ""} open
+                    </CardTitle>
+                    <CardDescription className="text-slate-400">
+                      Save them to free up memory and declutter
+                    </CardDescription>
+                  </div>
                 </div>
-                <button
-                  onClick={handleSaveCurrentTabs}
+              </CardHeader>
+              <CardFooter className="relative pt-0">
+                <Button 
+                  onClick={handleSaveCurrentTabs} 
                   disabled={isLoading}
-                  className="px-8 py-3 rounded-lg font-medium hover:opacity-90 transition-all duration-200 disabled:opacity-50 text-sm whitespace-nowrap"
-                  style={{
-                    backgroundColor: theme.restoreColor,
-                    color: theme.backgroundColor,
-                  }}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg shadow-blue-500/20 transition-all"
                 >
-                  {isLoading ? "⟳ Saving..." : "↓ Save All Tabs"}
-                </button>
-              </div>
-            </div>
+                  <Save className="w-4 h-4 mr-2" />
+                  {isLoading ? "Saving..." : "Save All Tabs"}
+                </Button>
+              </CardFooter>
+            </Card>
           )}
 
+          {/* Search Bar */}
           {allTabs.length > 0 && (
-            <div className="mb-8">
-              <div
-                className="relative rounded-lg border backdrop-blur"
-                style={{
-                  backgroundColor: "rgba(255, 255, 255, 0.04)",
-                  borderColor: "rgba(255, 255, 255, 0.1)",
-                }}
-              >
-                <svg
-                  className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-50"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search tabs by title or URL..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-3 pl-12 pr-4 rounded-lg outline-none transition-all duration-200 text-sm"
-                  style={{
-                    backgroundColor: "transparent",
-                    color: theme.textColor,
-                  }}
-                />
-              </div>
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Input
+                type="text"
+                placeholder="Search tabs by title or URL..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-12 h-12 bg-slate-900/50 border-slate-800 rounded-xl text-white placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+              />
             </div>
           )}
 
+          {/* Action Bar */}
           {filteredTabs.length > 0 && (
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex-1">
-                <h2 className="text-xl font-light">{searchQuery ? `Search Results` : "Saved Tabs"}</h2>
-                <p className="text-xs mt-2" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+            <div className="flex items-center justify-between p-4 bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-xl">
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  {searchQuery ? `Search Results` : "Saved Tabs"}
+                </h2>
+                <p className="text-sm text-slate-400">
                   {searchQuery
                     ? `${filteredTabs.length} result${filteredTabs.length !== 1 ? "s" : ""}`
-                    : `${allTabs.length} total saved`}
+                    : `${allTabs.length} tab${allTabs.length !== 1 ? "s" : ""} saved`}
                 </p>
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <button
-                  onClick={handleRestoreAll}
-                  disabled={isLoading}
-                  className="font-medium hover:opacity-70 transition-opacity disabled:opacity-50 text-sm px-4 py-2 rounded-lg hover:bg-white/5"
-                  style={{ color: theme.restoreColor }}
+              <div className="flex items-center gap-2">
+                <Button 
+                  onClick={handleRestoreAll} 
+                  disabled={isLoading} 
+                  variant="outline"
+                  className="border-slate-700 bg-slate-800/50 hover:bg-slate-700 text-white"
                 >
-                  ↻ Restore all
-                </button>
-                <button
-                  onClick={handleDeleteAll}
-                  className="font-medium hover:opacity-70 transition-opacity text-sm px-4 py-2 rounded-lg hover:bg-white/5"
-                  style={{ color: theme.deleteColor }}
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Restore all
+                </Button>
+                <Button 
+                  onClick={handleDeleteAll} 
+                  variant="destructive"
+                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20"
                 >
-                  × Delete all
-                </button>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete all
+                </Button>
               </div>
             </div>
           )}
 
+          {/* Empty State */}
           {allTabs.length === 0 && (
-            <div className="text-center py-24">
-              <div className="mb-8 text-6xl opacity-30">⊡</div>
-              <p className="text-xl font-light mb-3" style={{ color: "rgba(255, 255, 255, 0.8)" }}>
-                No saved tabs yet
-              </p>
-              <p className="text-sm" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-                Save your current tabs to get started
-              </p>
+            <div className="text-center py-24 h-screen flex flex-col items-center justify-center">
+              <div className="w-20 h-20 mx-auto mb-6 bg-slate-800/50 rounded-3xl flex items-center justify-center">
+                <Layers className="w-10 h-10 text-slate-600" />
+              </div>
+              <p className="text-2xl font-semibold text-white mb-2">No saved tabs yet</p>
+              <p className="text-slate-400">Save your current tabs to get started</p>
             </div>
           )}
 
+          {/* Tab List */}
           {filteredTabs.length > 0 && (
             <div className="space-y-3">
               {filteredTabs.map(({ tab, sessionId, index }) => {
                 const tabKey = `${sessionId}-${index}`
                 return (
-                  <div
+                  <Card 
                     key={tabKey}
-                    className="group flex items-start gap-4 p-4 rounded-lg transition-all duration-200 hover:bg-white/[0.06] border border-transparent hover:border-white/10"
-                    style={{}}
+                    className="border-slate-800 bg-slate-900/50 backdrop-blur-xl hover:bg-slate-800/50 transition-all group"
                   >
-                    {/* Favicon */}
-                    <div className="flex-shrink-0 mt-1">
-                      {tab.favIconUrl ? (
-                        <img
-                          src={tab.favIconUrl || "/placeholder.svg"}
-                          alt=""
-                          className="w-5 h-5 rounded-sm"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement
-                            if (target) target.style.display = "none"
-                          }}
-                        />
-                      ) : (
-                        <div
-                          className="w-5 h-5 rounded-sm flex items-center justify-center text-xs font-medium"
-                          style={{
-                            backgroundColor: "rgba(255, 255, 255, 0.1)",
-                            color: theme.restoreColor,
-                          }}
+                    <CardContent className="flex items-center gap-4 p-4">
+                      <div className="flex-shrink-0">
+                        {tab.favIconUrl ? (
+                          <img
+                            src={tab.favIconUrl}
+                            alt=""
+                            className="w-6 h-6 rounded-lg"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement
+                              if (target) target.style.display = "none"
+                            }}
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-lg bg-slate-800 flex items-center justify-center">
+                            <div className="w-3 h-3 bg-gradient-to-br from-blue-400 to-purple-400 rounded" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate group-hover:text-blue-400 transition-colors">
+                          {tab.title || "Untitled"}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate">{tab.url}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => handleCopyUrl(tab.url)}
+                          className="rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white"
                         >
-                          ◆
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Tab Content */}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium mb-1 cursor-pointer hover:opacity-70 transition-opacity line-clamp-1">
-                        {tab.title || "Untitled"}
-                      </h3>
-                      <p className="text-xs font-mono truncate" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-                        {tab.url}
-                      </p>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-shrink-0">
-                      <button
-                        onClick={() => handleCopyUrl(tab.url)}
-                        className="p-2 hover:bg-white/10 rounded transition-colors"
-                        title="Copy URL"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.5}
-                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                          />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleRestoreSingle(tab.url)}
-                        className="px-3 py-2 rounded text-xs font-medium transition-all hover:opacity-90"
-                        style={{
-                          color: theme.backgroundColor,
-                          backgroundColor: theme.restoreColor,
-                        }}
-                      >
-                        ↻
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTab(sessionId, index)}
-                        className="p-2 hover:bg-white/10 rounded transition-colors"
-                        style={{ color: theme.deleteColor }}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.5}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRestoreSingle(tab.url)}
+                          className="border-slate-700 bg-slate-800/50 hover:bg-blue-500/10 hover:border-blue-500/50 text-slate-300 hover:text-blue-400 transition-all"
+                        >
+                          <RotateCcw className="w-3 h-3 mr-1" />
+                          Restore
+                        </Button>
+                        <Button 
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteTab(sessionId, index)}
+                          className="rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
                 )
               })}
             </div>
           )}
 
-          {/* No Results State */}
+          {/* No Results */}
           {searchQuery && filteredTabs.length === 0 && (
-            <div className="text-center py-20">
-              <p className="text-sm" style={{ color: "rgba(255, 255, 255, 0.6)" }}>
-                No tabs match "{searchQuery}"
-              </p>
+            <div className="text-center py-16">
+              <p className="text-slate-400">No tabs match "{searchQuery}"</p>
             </div>
           )}
         </main>
 
-        <footer
-          className="border-t mt-auto py-6 px-6"
-          style={{
-            borderColor: "rgba(255, 255, 255, 0.08)",
-            color: "rgba(255, 255, 255, 0.5)",
-          }}
-        >
-          <div className="max-w-7xl mx-auto flex items-center justify-between text-xs">
-            <p>Made by Proxy • Built with care</p>
-            <button
-              onClick={() => setShowFeedback(true)}
-              className="hover:opacity-100 opacity-70 transition-opacity underline"
-            >
-              Send Feedback
-            </button>
-          </div>
+        {/* Footer */}
+        <footer className="text-center mt-16 pt-8 border-t border-slate-800">
+          <p className="text-slate-500 text-sm mb-2">Made with ❤️ by Proxy & <a href="https://discord.com/users/853525881032933376">Cyber</a></p>
+          <Button 
+            variant="link" 
+            onClick={() => setShowFeedback(true)}
+            className="text-slate-400 hover:text-blue-400"
+          >
+            Send Feedback
+          </Button>
         </footer>
       </div>
 
-      {showFeedback && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
-          onClick={() => setShowFeedback(false)}
-        >
-          <div
-            className="rounded-xl p-8 max-w-md w-full backdrop-blur-sm border"
-            style={{
-              backgroundColor: "rgba(10, 25, 41, 0.95)",
-              borderColor: "rgba(255, 255, 255, 0.1)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-xl font-light mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>
-              Send Feedback
-            </h3>
-            <p className="text-sm mb-6" style={{ color: "rgba(255, 255, 255, 0.7)" }}>
+      {/* Feedback Dialog */}
+      <Dialog open={showFeedback} onOpenChange={setShowFeedback}>
+        <DialogContent className="bg-slate-900 border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Send Feedback</DialogTitle>
+            <DialogDescription className="text-slate-400">
               Help us improve TooManyTabs by sharing your thoughts
-            </p>
-            <textarea
-              placeholder="Your feedback here..."
-              className="w-full p-4 rounded-lg mb-6 text-sm outline-none resize-none"
-              rows={4}
-              value={feedbackText}
-              onChange={(e) => setFeedbackText(e.target.value)}
-              style={{
-                backgroundColor: "rgba(255, 255, 255, 0.05)",
-                color: theme.textColor,
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-              }}
-            />
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowFeedback(false)}
-                className="px-6 py-2.5 rounded-lg text-sm hover:opacity-70 transition-opacity"
-                style={{
-                  backgroundColor: "rgba(255, 255, 255, 0.08)",
-                  color: theme.textColor,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSendFeedback}
-                className="px-6 py-2.5 rounded-lg text-sm font-medium transition-all hover:opacity-90"
-                style={{
-                  backgroundColor: theme.restoreColor,
-                  color: theme.backgroundColor,
-                }}
-                disabled={!feedbackText.trim()}
-              >
-                Send
-              </button>
-            </div>
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            placeholder="Your feedback here..."
+            className="w-full p-3 rounded-lg border border-slate-800 bg-slate-800/50 text-white text-sm placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+            rows={4}
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            <Button 
+              variant="ghost" 
+              onClick={() => setShowFeedback(false)}
+              className="hover:bg-slate-800"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSendFeedback} 
+              disabled={!feedbackText.trim()}
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+            >
+              Send
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {/* Settings Modal */}
+      {/* Settings Dialog */}
       <Settings
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
         settings={theme}
         onSettingsChange={saveTheme}
       />
-    </>
+    </div>
   )
 }
