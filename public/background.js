@@ -7,13 +7,13 @@ chrome.runtime.onInstalled.addListener(() => {
 
   chrome.contextMenus.create({
     id: 'save-current-tabs',
-    title: 'Save All Tabs to TooManyTabs',
+    title: 'Save All Tabs',
     contexts: ['page']
   });
 
   chrome.contextMenus.create({
     id: 'save-this-tab',
-    title: 'Save This Tab to TooManyTabs',
+    title: 'Save This Tab',
     contexts: ['page']
   });
 });
@@ -32,6 +32,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     }
   }
 });
+
+
 
 async function saveAllCurrentTabs() {
   try {

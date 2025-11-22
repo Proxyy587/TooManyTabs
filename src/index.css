@@ -1,10 +1,12 @@
-@import "tailwindcss";
-@import "tw-animate-css";
 @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap');
 
-@custom-variant dark (&:is(.dark *));
 
+@import "tailwindcss";
+@import "tw-animate-css";
+
+
+@custom-variant dark (&:is(.dark *));
 
 
 :root {
@@ -50,16 +52,12 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 body {
   margin: 0;
   min-width: 320px;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .font-serif {
