@@ -35,11 +35,11 @@ interface ThemeSettings {
 }
 
 const defaultTheme: ThemeSettings = {
-  backgroundColor: "#0A1929",
-  textColor: "#FFFFFF",
-  accentColor: "#FFFFFF",
-  deleteColor: "#FF4444",
-  restoreColor: "#FFFFFF",
+  backgroundColor: "#1A1A1A",
+  textColor: "#F5F5F5",
+  accentColor: "#60A5FA",
+  deleteColor: "#F87171",
+  restoreColor: "#34D399",
 }
 
 declare const chrome: typeof globalThis.chrome
@@ -59,6 +59,20 @@ export default function App() {
     loadTheme()
     getCurrentTabs()
   }, [])
+
+  // Apply theme colors as CSS variables
+  useEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty('--theme-background', theme.backgroundColor)
+    root.style.setProperty('--theme-text', theme.textColor)
+    root.style.setProperty('--theme-accent', theme.accentColor)
+    root.style.setProperty('--theme-restore', theme.restoreColor)
+    root.style.setProperty('--theme-delete', theme.deleteColor)
+    
+    // Apply background color to body
+    document.body.style.backgroundColor = theme.backgroundColor
+    document.body.style.color = theme.textColor
+  }, [theme])
 
   const loadTheme = async () => {
     try {
@@ -224,11 +238,21 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-900 w-full flex justify-center items-start text-white">
-    <div className="w-full max-w-4xl px-6 py-8">
+    <div 
+      className="min-h-screen w-full flex justify-center items-start"
+      style={{ 
+        backgroundColor: theme.backgroundColor,
+        color: theme.textColor 
+      }}
+    >
+    <div className="w-full max-w-4xl px-6 py-2">
       <div className="w-full">
 
-          <Header onSettingsClick={() => setShowSettings(true)} />
+          <Header 
+            onSettingsClick={() => setShowSettings(true)}
+            textColor={theme.textColor}
+            accentColor={theme.accentColor}
+          />
         </div>
 
         <div className="mb-6">
@@ -236,6 +260,9 @@ export default function App() {
             tabCount={currentTabs.length}
             isLoading={isLoading}
             onSave={handleSaveCurrentTabs}
+            backgroundColor={theme.backgroundColor}
+            textColor={theme.textColor}
+            accentColor={theme.accentColor}
           />
         </div>
 
@@ -243,7 +270,12 @@ export default function App() {
           {allTabs.length > 0 && (
             <>
               <div className="mb-6">
-                <SearchBar value={searchQuery} onChange={setSearchQuery} />
+                <SearchBar 
+                  value={searchQuery} 
+                  onChange={setSearchQuery}
+                  backgroundColor={theme.backgroundColor}
+                  textColor={theme.textColor}
+                />
               </div>
 
               <div className="mb-6">
@@ -254,15 +286,23 @@ export default function App() {
                   isLoading={isLoading}
                   onRestoreAll={handleRestoreAll}
                   onDeleteAll={handleDeleteAll}
+                  restoreColor={theme.restoreColor}
+                  deleteColor={theme.deleteColor}
+                  textColor={theme.textColor}
                 />
               </div>
             </>
           )}
 
-          {allTabs.length === 0 && <EmptyState />}
+          {allTabs.length === 0 && (
+            <EmptyState 
+              textColor={theme.textColor}
+              backgroundColor={theme.backgroundColor}
+            />
+          )}
 
           {filteredTabs.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-1">
               {filteredTabs.map(({ tab, sessionId, index }) => {
                 const tabKey = `${sessionId}-${index}`
                 return (
@@ -272,6 +312,9 @@ export default function App() {
                     onRestore={handleRestoreSingle}
                     onDelete={() => handleDeleteTab(sessionId, index)}
                     onCopy={handleCopyUrl}
+                    restoreColor={theme.restoreColor}
+                    deleteColor={theme.deleteColor}
+                    textColor={theme.textColor}
                   />
                 )
               })}
@@ -282,12 +325,18 @@ export default function App() {
             <EmptyState
               message={`No tabs match "${searchQuery}"`}
               description="Try a different search term"
+              textColor={theme.textColor}
+              backgroundColor={theme.backgroundColor}
             />
           )}
         </main>
 
         <div className="mt-12">
-          <Footer onFeedbackClick={() => setShowFeedback(true)} />
+          <Footer 
+            onFeedbackClick={() => setShowFeedback(true)}
+            textColor={theme.textColor}
+            accentColor={theme.accentColor}
+          />
         </div>
       </div>
 

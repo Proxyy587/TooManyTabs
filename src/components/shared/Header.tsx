@@ -1,30 +1,48 @@
-import { Settings as SettingsIcon, Layers } from "lucide-react"
+import { Settings as SettingsIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface HeaderProps {
   onSettingsClick: () => void
 }
 
-export function Header({ onSettingsClick }: HeaderProps) {
+interface HeaderProps {
+  onSettingsClick: () => void
+  textColor?: string
+  accentColor?: string
+}
+
+export function Header({ onSettingsClick, textColor, accentColor }: HeaderProps) {
   return (
-    <header className="mb-8 pb-6 border-b border-zinc-800">
+    <header 
+      className="mb-8 pb-2 border-b"
+      style={{ 
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+      }}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center border border-zinc-700">
-            <Layers className="w-6 h-6 text-white" />
-          </div>
+            <img src="/icon.svg" alt="TooManyTabs" className="w-9 h-9" />
           <div>
-            <h1 className="text-2xl font-bold text-white">
-              TabVault
+            <h1 
+              className="text-xl font-serif font-semibold"
+              style={{ color: textColor || 'var(--theme-text)' }}
+            >
+              TooManyTabs
             </h1>
-            <p className="text-sm text-zinc-400 mt-1">Organize your browsing chaos</p>
+            <p 
+              className="text-xs tracking-wider font-serif font-medium mt-1 opacity-70"
+              style={{ color: textColor || 'var(--theme-text)' }}
+            >
+              Organize your browsing chaos
+            </p>
           </div>
         </div>
         <Button
           variant="ghost"
           size="icon"
           onClick={onSettingsClick}
-          className="rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+          className="rounded-lg hover:opacity-70 transition-colors"
+          style={{ color: accentColor || textColor || 'var(--theme-text)' }}
           aria-label="Open settings"
         >
           <SettingsIcon className="w-5 h-5" />

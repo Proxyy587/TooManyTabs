@@ -34,12 +34,13 @@ export default function Settings({ isOpen, onClose, settings, onSettingsChange }
   }
 
   const handleReset = () => {
+    // Reset to Dark Mode preset
     const defaultSettings: ThemeSettings = {
-      backgroundColor: "#0A1929",
-      textColor: "#FFFFFF",
-      accentColor: "#FFFFFF",
-      deleteColor: "#FF4444",
-      restoreColor: "#FFFFFF",
+      backgroundColor: "#1A1A1A",
+      textColor: "#F5F5F5",
+      accentColor: "#60A5FA",
+      deleteColor: "#F87171",
+      restoreColor: "#34D399",
     }
     setLocalSettings(defaultSettings)
     onSettingsChange(defaultSettings)
@@ -48,6 +49,8 @@ export default function Settings({ isOpen, onClose, settings, onSettingsChange }
 
   const handlePreset = (preset: ThemeSettings) => {
     setLocalSettings(preset)
+    // Immediately apply the preset so user can see it
+    onSettingsChange(preset)
   }
 
   return (
@@ -59,7 +62,8 @@ export default function Settings({ isOpen, onClose, settings, onSettingsChange }
           </DialogHeader>
 
           <div className="space-y-8">
-            {/* Background Color */}
+            {/* Color Editing - Commented out for now */}
+            {/*
             <div className="space-y-4">
               <label className="block text-sm font-medium text-zinc-300">
                 Background Color
@@ -81,7 +85,6 @@ export default function Settings({ isOpen, onClose, settings, onSettingsChange }
               </div>
             </div>
 
-            {/* Text Color */}
             <div className="space-y-4">
               <label className="block text-sm font-medium text-zinc-300">
                 Text Color
@@ -103,7 +106,6 @@ export default function Settings({ isOpen, onClose, settings, onSettingsChange }
               </div>
             </div>
 
-            {/* Restore Button Color */}
             <div className="space-y-4">
               <label className="block text-sm font-medium text-zinc-300">
                 Restore Button Color
@@ -125,7 +127,6 @@ export default function Settings({ isOpen, onClose, settings, onSettingsChange }
               </div>
             </div>
 
-            {/* Delete Button Color */}
             <div className="space-y-4">
               <label className="block text-sm font-medium text-zinc-300">
                 Delete Button Color
@@ -147,7 +148,6 @@ export default function Settings({ isOpen, onClose, settings, onSettingsChange }
               </div>
             </div>
 
-            {/* Accent Color */}
             <div className="space-y-4">
               <label className="block text-sm font-medium text-zinc-300">
                 Accent Color
@@ -168,72 +168,104 @@ export default function Settings({ isOpen, onClose, settings, onSettingsChange }
                 />
               </div>
             </div>
+            */}
 
             {/* Preset Themes */}
             <div className="space-y-4">
-              <label className="block text-sm font-medium text-zinc-300">
-                Preset Themes
+              <label className="block text-sm font-medium text-zinc-300 mb-2">
+                Choose a Theme
               </label>
               <div className="grid grid-cols-2 gap-4">
+                {/* Light Mode */}
                 <button
                   type="button"
                   onClick={() => {
                     handlePreset({
-                      backgroundColor: "#0A1929",
-                      textColor: "#FFFFFF",
-                      accentColor: "#FFFFFF",
-                      deleteColor: "#FF4444",
-                      restoreColor: "#FFFFFF",
+                      backgroundColor: "#FFFFFF",
+                      textColor: "#1F2937",
+                      accentColor: "#3B82F6",
+                      deleteColor: "#EF4444",
+                      restoreColor: "#10B981",
                     })
                   }}
-                  className="px-4 py-3 rounded-lg border-2 border-zinc-700 transition-all hover:border-zinc-600 hover:bg-zinc-800 text-sm font-medium bg-zinc-800 text-white"
+                  className="relative px-4 py-4 rounded-lg border-2 border-zinc-700 transition-all hover:border-zinc-600 hover:scale-105 text-sm font-medium bg-gradient-to-br from-white to-gray-100 text-gray-900 shadow-md overflow-hidden group"
                 >
-                  Dark Blue
+                  <div className="absolute inset-0 bg-white opacity-50 group-hover:opacity-0 transition-opacity" />
+                  <div className="relative">
+                    <div className="font-semibold mb-1">Light Mode</div>
+                    <div className="text-xs opacity-70">Clean & Bright</div>
+                  </div>
                 </button>
+
+                {/* Dark Mode */}
                 <button
                   type="button"
                   onClick={() => {
                     handlePreset({
                       backgroundColor: "#1A1A1A",
-                      textColor: "#E0E0E0",
-                      accentColor: "#4A9EFF",
-                      deleteColor: "#FF6B6B",
-                      restoreColor: "#51CF66",
+                      textColor: "#F5F5F5",
+                      accentColor: "#60A5FA",
+                      deleteColor: "#F87171",
+                      restoreColor: "#34D399",
                     })
                   }}
-                  className="px-4 py-3 rounded-lg border-2 border-zinc-700 transition-all hover:border-zinc-600 hover:bg-zinc-800 text-sm font-medium bg-zinc-800 text-white"
+                  className="relative px-4 py-4 rounded-lg border-2 border-zinc-700 transition-all hover:border-zinc-600 hover:scale-105 text-sm font-medium bg-gradient-to-br from-gray-900 to-black text-white shadow-md overflow-hidden group"
                 >
-                  Dark Gray
+                  <div className="absolute inset-0 bg-gray-800 opacity-50 group-hover:opacity-0 transition-opacity" />
+                  <div className="relative">
+                    <div className="font-semibold mb-1">Dark Mode</div>
+                    <div className="text-xs opacity-70">Easy on the Eyes</div>
+                  </div>
                 </button>
+
+                {/* Dracula */}
                 <button
                   type="button"
                   onClick={() => {
                     handlePreset({
-                      backgroundColor: "#1E293B",
-                      textColor: "#F1F5F9",
-                      accentColor: "#8B5CF6",
-                      deleteColor: "#EF4444",
-                      restoreColor: "#10B981",
+                      backgroundColor: "#282A36",
+                      textColor: "#F8F8F2",
+                      accentColor: "#BD93F9",
+                      deleteColor: "#FF5555",
+                      restoreColor: "#50FA7B",
                     })
                   }}
-                  className="px-4 py-3 rounded-lg border-2 border-zinc-700 transition-all hover:border-zinc-600 hover:bg-zinc-800 text-sm font-medium bg-zinc-800 text-white"
+                  className="relative px-4 py-4 rounded-lg border-2 border-zinc-700 transition-all hover:border-zinc-600 hover:scale-105 text-sm font-medium bg-gradient-to-br from-purple-900 to-gray-900 text-purple-100 shadow-md overflow-hidden group"
+                  style={{
+                    backgroundColor: "#282A36",
+                    background: "linear-gradient(135deg, #282A36 0%, #1E1F29 100%)",
+                  }}
                 >
-                  Slate
+                  <div className="absolute inset-0 bg-purple-900 opacity-30 group-hover:opacity-0 transition-opacity" />
+                  <div className="relative">
+                    <div className="font-semibold mb-1">Dracula</div>
+                    <div className="text-xs opacity-70">Purple & Mysterious</div>
+                  </div>
                 </button>
+
+                {/* Nord */}
                 <button
                   type="button"
                   onClick={() => {
                     handlePreset({
-                      backgroundColor: "#000000",
-                      textColor: "#FFFFFF",
-                      accentColor: "#00FF88",
-                      deleteColor: "#FF0080",
-                      restoreColor: "#00D9FF",
+                      backgroundColor: "#2E3440",
+                      textColor: "#ECEFF4",
+                      accentColor: "#88C0D0",
+                      deleteColor: "#BF616A",
+                      restoreColor: "#A3BE8C",
                     })
                   }}
-                  className="px-4 py-3 rounded-lg border-2 border-zinc-700 transition-all hover:border-zinc-600 hover:bg-zinc-800 text-sm font-medium bg-zinc-800 text-white"
+                  className="relative px-4 py-4 rounded-lg border-2 border-zinc-700 transition-all hover:border-zinc-600 hover:scale-105 text-sm font-medium bg-gradient-to-br from-slate-800 to-slate-900 text-slate-100 shadow-md overflow-hidden group"
+                  style={{
+                    backgroundColor: "#2E3440",
+                    background: "linear-gradient(135deg, #2E3440 0%, #3B4252 100%)",
+                  }}
                 >
-                  Pure Black
+                  <div className="absolute inset-0 bg-cyan-900 opacity-20 group-hover:opacity-0 transition-opacity" />
+                  <div className="relative">
+                    <div className="font-semibold mb-1">Nord</div>
+                    <div className="text-xs opacity-70">Arctic & Cool</div>
+                  </div>
                 </button>
               </div>
             </div>

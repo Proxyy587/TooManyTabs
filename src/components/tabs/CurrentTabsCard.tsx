@@ -1,4 +1,4 @@
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Save } from "lucide-react"
 
@@ -6,33 +6,52 @@ interface CurrentTabsCardProps {
   tabCount: number
   isLoading: boolean
   onSave: () => void
+  backgroundColor?: string
+  textColor?: string
+  accentColor?: string
 }
 
-export function CurrentTabsCard({ tabCount, isLoading, onSave }: CurrentTabsCardProps) {
+export function CurrentTabsCard({ tabCount, isLoading, onSave, backgroundColor, textColor, accentColor }: CurrentTabsCardProps) {
   if (tabCount === 0) return null
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900 overflow-hidden">
-      <CardHeader className="">
-        <div className="flex flex-col">
-          <CardTitle className="text-lg font-semibold text-white">
-            {tabCount} tab{tabCount !== 1 ? "s" : ""} open
-          </CardTitle>
-          <CardDescription className="text-zinc-400 text-sm">
-            Save them to free up memory and declutter
-          </CardDescription>
+    <Card 
+      className="overflow-hidden px-5 py-4 shadow-md"
+      style={{
+        backgroundColor: backgroundColor || 'var(--theme-background)',
+        borderColor: 'rgba(255, 255, 255, 0.1)'
+      }}
+    >
+      <CardHeader className="p-0">
+        <div className="flex items-center justify-between w-full">
+          <div>
+            <h2 
+              className="text-lg font-semibold mb-1"
+              style={{ color: textColor || 'var(--theme-text)' }}
+            >
+              {tabCount} tab{tabCount !== 1 ? "s" : ""} open
+            </h2>
+            <p 
+              className="text-sm opacity-70"
+              style={{ color: textColor || 'var(--theme-text)' }}
+            >
+              Save them to free up memory and declutter
+            </p>
+          </div>
+          <Button
+            onClick={onSave}
+            disabled={isLoading}
+            className="transition-all px-5 py-2 ml-4"
+            style={{
+              backgroundColor: accentColor || 'var(--theme-accent)',
+              color: textColor || 'var(--theme-text)'
+            }}
+          >
+            <Save className="w-4 h-4 mr-2" />
+            {isLoading ? "Saving..." : "Save Session"}
+          </Button>
         </div>
       </CardHeader>
-      <CardFooter className="pt-0 pb-6 px-6">
-        <Button
-          onClick={onSave}
-          disabled={isLoading}
-          className="bg-zinc-800 hover:bg-zinc-700 text-white transition-all p-[25px]"
-        >
-          <Save className="w-4 h-4 mr-2" />
-      {isLoading ? "Saving..." : "Save Session"}
-    </Button>
-  </CardFooter>
-</Card>
-);
+    </Card>
+  );
 }

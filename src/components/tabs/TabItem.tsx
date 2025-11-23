@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Copy, RotateCcw, Trash2 } from "lucide-react"
+import { hexToRgba } from "@/lib/utils"
 
 interface Tab {
   id: string
@@ -15,12 +16,21 @@ interface TabItemProps {
   onRestore: (url: string) => void
   onDelete: () => void
   onCopy: (url: string) => void
+  restoreColor?: string
+  deleteColor?: string
+  textColor?: string
 }
 
-export function TabItem({ tab, onRestore, onDelete, onCopy }: TabItemProps) {
+export function TabItem({ tab, onRestore, onDelete, onCopy, restoreColor, deleteColor, textColor }: TabItemProps) {
   return (
-    <Card className="border-zinc-800 bg-zinc-900 transition-all group">
-      <CardContent className="flex items-center gap-4 p-4">
+    <Card 
+      className="transition-all group p-1"
+      style={{
+        backgroundColor: 'var(--theme-background)',
+        borderColor: 'rgba(255, 255, 255, 0.1)'
+      }}
+    >
+      <CardContent className="flex items-center gap-3">
         <div className="flex-shrink-0">
           {tab.favIconUrl ? (
             <img
@@ -39,17 +49,23 @@ export function TabItem({ tab, onRestore, onDelete, onCopy }: TabItemProps) {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-white truncate group-hover:text-zinc-300 transition-colors">
+          <p 
+            className="text-sm font-medium truncate group-hover:opacity-70 transition-colors"
+            style={{ color: textColor || 'var(--theme-text)' }}
+          >
             {tab.title || "Untitled"}
           </p>
-          <p className="text-xs text-zinc-500 truncate mt-1">{tab.url}</p>
+          <p className="text-xs opacity-60 truncate mt-1" style={{ color: textColor || 'var(--theme-text)' }}>
+            {tab.url}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => onCopy(tab.url)}
-            className="rounded-lg hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+            className="rounded-lg hover:opacity-70 transition-colors"
+            style={{ color: textColor || 'var(--theme-text)' }}
             aria-label="Copy URL"
           >
             <Copy className="w-4 h-4" />
@@ -58,7 +74,12 @@ export function TabItem({ tab, onRestore, onDelete, onCopy }: TabItemProps) {
             variant="outline"
             size="sm"
             onClick={() => onRestore(tab.url)}
-            className="border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all"
+            className="transition-all"
+            style={{
+              backgroundColor: restoreColor || 'var(--theme-restore)',
+              color: textColor || 'var(--theme-text)',
+              borderColor: restoreColor || 'var(--theme-restore)'
+            }}
           >
             <RotateCcw className="w-3 h-3 mr-1.5" />
             Restore
@@ -67,7 +88,17 @@ export function TabItem({ tab, onRestore, onDelete, onCopy }: TabItemProps) {
             variant="ghost"
             size="icon"
             onClick={onDelete}
-            className="rounded-lg hover:bg-red-600/20 text-zinc-400 hover:text-red-400 transition-colors"
+            className="rounded-lg transition-colors"
+            style={{
+              color: deleteColor || 'var(--theme-delete)'
+            }}
+            onMouseEnter={(e) => {
+              const deleteClr = deleteColor || '#FF4444'
+              e.currentTarget.style.backgroundColor = hexToRgba(deleteClr, 0.2)
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent'
+            }}
             aria-label="Delete tab"
           >
             <Trash2 className="w-4 h-4" />
