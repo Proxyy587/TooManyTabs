@@ -27,7 +27,7 @@ export function Footer({ onFeedbackClick, textColor, accentColor }: FooterProps)
         Proxy
         </a> 
         
-        &{" "}
+        {/* &{" "} */}
         
         {/* <a
         href="https://discord.com/users/853525881032933376"
