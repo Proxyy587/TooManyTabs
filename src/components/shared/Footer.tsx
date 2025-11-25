@@ -23,11 +23,13 @@ export function Footer({ onFeedbackClick, textColor, accentColor }: FooterProps)
           rel="noopener noreferrer"
           className="hover:opacity-100 transition-colors"
           style={{ color: accentColor || textColor || 'var(--theme-accent)' }}
-        > Proxy</a> 
+        > 
+        Proxy
+        </a> 
         
         &{" "}
         
-        <a
+        {/* <a
         href="https://discord.com/users/853525881032933376"
         target="_blank"
         rel="noopener noreferrer"
@@ -35,7 +37,7 @@ export function Footer({ onFeedbackClick, textColor, accentColor }: FooterProps)
         style={{ color: accentColor || textColor || 'var(--theme-accent)' }}
       >
         Cyber
-      </a>
+      </a> */}
       </p>
       <Button
         variant="link"
