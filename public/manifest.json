@@ -1,12 +1,16 @@
 {
   "manifest_version": 3,
   "name": "TooManyTabs",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Save all open tabs into a list, just like OneTab",
   "permissions": [
     "tabs",
     "storage",
-    "contextMenus"
+    "contextMenus",
+    "identity"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -15,6 +19,13 @@
     "16": "icon.svg",
     "48": "icon.svg",
     "128": "icon.svg"
+  },
+  "oauth2": {
+    "client_id": "449556864758-82anektffjkus6dgd5qe37qnqhbmce2n.apps.googleusercontent.com",
+    "scopes": [
+      "openid",
+      "email",
+      "profile"
+    ]
   }
 }
-  

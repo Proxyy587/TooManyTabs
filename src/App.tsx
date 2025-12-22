@@ -10,6 +10,14 @@ import { EmptyState } from "@/components/shared/EmptyState"
 import { Footer } from "@/components/shared/Footer"
 import { FeedbackDialog } from "@/components/shared/FeedbackDialog"
 import Settings from "./Settings"
+import {
+  googleLogin,
+  saveTabsToBackend,
+  loadSessionsFromBackend,
+  deleteSessionFromBackend,
+  isAuthenticated as checkAuth,
+  getCurrentUser,
+} from "@/lib/api"
 
 interface Tab {
   id: string
@@ -53,14 +61,22 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("")
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackText, setFeedbackText] = useState("")
+  const [isAuthLoading, setIsAuthLoading] = useState(true)
+  const [isAuthenticated, setIsAuthenticatedState] = useState(false)
+  const [user, setUser] = useState<{ id: number; email: string; name?: string; picture?: string } | null>(null)
 
   useEffect(() => {
-    loadSavedSessions()
+    initializeAuth()
     loadTheme()
     getCurrentTabs()
   }, [])
 
-  // Apply theme colors as CSS variables
+  useEffect(() => {
+    if (!isAuthLoading && isAuthenticated) {
+      loadSavedSessions()
+    }
+  }, [isAuthLoading, isAuthenticated])
+
   useEffect(() => {
     const root = document.documentElement
     root.style.setProperty('--theme-background', theme.backgroundColor)
@@ -69,7 +85,6 @@ export default function App() {
     root.style.setProperty('--theme-restore', theme.restoreColor)
     root.style.setProperty('--theme-delete', theme.deleteColor)
     
-    // Apply background color to body
     document.body.style.backgroundColor = theme.backgroundColor
     document.body.style.color = theme.textColor
   }, [theme])
@@ -94,11 +109,59 @@ export default function App() {
     }
   }
 
+  const initializeAuth = async () => {
+    try {
+      setIsAuthLoading(true)
+      const authenticated = await checkAuth()
+      const currentUser = await getCurrentUser()
+      
+      setIsAuthenticatedState(authenticated)
+      setUser(currentUser)
+    } catch (error) {
+      console.error("Error checking auth:", error)
+    } finally {
+      setIsAuthLoading(false)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    try {
+      setIsAuthLoading(true)
+      console.log("Starting Google login...")
+      const authData = await googleLogin()
+      console.log("Login successful:", authData)
+      setIsAuthenticatedState(true)
+      setUser(authData.user)
+      await loadSavedSessions()
+    } catch (error) {
+      console.error("Error logging in:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error"
+      alert(`Failed to log in: ${errorMessage}. Please check the console for details and ensure the backend server is running.`)
+    } finally {
+      setIsAuthLoading(false)
+    }
+  }
+
   const loadSavedSessions = async () => {
     try {
-      const result = await chrome.storage.local.get(["savedSessions"])
-      if (result.savedSessions) {
-        setSavedSessions(result.savedSessions)
+      const cacheResult = await chrome.storage.local.get(["savedSessions"])
+      if (cacheResult.savedSessions) {
+        setSavedSessions(cacheResult.savedSessions)
+      }
+
+      const authenticated = await checkAuth()
+      if (!authenticated) {
+        return
+      }
+
+      try {
+        const backendData = await loadSessionsFromBackend()
+        if (backendData.success && backendData.sessions) {
+          setSavedSessions(backendData.sessions)
+          await chrome.storage.local.set({ savedSessions: backendData.sessions })
+        }
+      } catch (error) {
+        console.error("Error loading from backend, using cache:", error)
       }
     } catch (error) {
       console.error("Error loading sessions:", error)
@@ -147,6 +210,22 @@ export default function App() {
 
       const updatedSessions = [newSession, ...savedSessions]
       await saveSessions(updatedSessions)
+
+      const authenticated = await checkAuth()
+      if (authenticated) {
+        try {
+          const tabsData = currentTabs.map((tab) => ({
+            url: tab.url,
+            title: tab.title,
+            favIconUrl: tab.favIconUrl,
+          }))
+          
+          await saveTabsToBackend(tabsData)
+          await loadSavedSessions()
+        } catch (error) {
+          console.error("Error saving to backend, using local cache:", error)
+        }
+      }
 
       const tabIds = currentTabs.map((tab) => Number.parseInt(tab.id))
       const filteredTabIds = tabIds.filter((id) => !isNaN(id))
@@ -198,12 +277,39 @@ export default function App() {
       }
       return session
     })
-    await saveSessions(updatedSessions.filter((s) => s.tabs.length > 0))
+    const filteredSessions = updatedSessions.filter((s) => s.tabs.length > 0)
+    
+    await saveSessions(filteredSessions)
+
+      const session = savedSessions.find((s) => s.id === sessionId)
+      if (session && session.tabs.length === 1) {
+        const authenticated = await checkAuth()
+        if (authenticated && sessionId.startsWith("session-")) {
+        try {
+          await deleteSessionFromBackend(sessionId)
+        } catch (error) {
+          console.error("Error deleting session from backend:", error)
+        }
+      }
+    }
   }
 
   const handleDeleteAll = async () => {
     if (window.confirm("Delete all saved sessions? This cannot be undone.")) {
       await saveSessions([])
+
+      const authenticated = await checkAuth()
+      if (authenticated) {
+        try {
+          await Promise.all(
+            savedSessions
+              .filter((s) => s.id.startsWith("session-"))
+              .map((s) => deleteSessionFromBackend(s.id))
+          )
+        } catch (error) {
+          console.error("Error deleting sessions from backend:", error)
+        }
+      }
     }
   }
 
@@ -252,6 +358,10 @@ export default function App() {
             onSettingsClick={() => setShowSettings(true)}
             textColor={theme.textColor}
             accentColor={theme.accentColor}
+            isAuthenticated={isAuthenticated}
+            user={user}
+            onLoginClick={handleGoogleLogin}
+            isAuthLoading={isAuthLoading}
           />
         </div>
 
