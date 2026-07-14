@@ -35,7 +35,7 @@ export function SavedTabsHeader({
           className="text-lg font-semibold mb-1"
           style={{ color: textColor || 'var(--theme-text)' }}
         >
-          {searchQuery ? "Search Results" : "Saved Sessions"}
+          {searchQuery ? "Search Results" : "Saved Groups"}
         </h2>
         <p 
           className="text-sm opacity-70"

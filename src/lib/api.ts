@@ -1,242 +1,335 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
-
-async function getAuthToken(): Promise<string | null> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(["authToken"], (result) => {
-      resolve(result.authToken || null);
-    });
-  });
+export interface TabData {
+  url: string;
+  title: string;
+  favIconUrl?: string | null;
+  position?: number;
 }
 
-async function apiRequest(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<Response> {
-  const token = await getAuthToken();
-  
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...options.headers,
-  };
-
-  if (token) {
-    (headers as HeadersInit & { Authorization: string }).Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  if (response.status === 401) {
-    chrome.storage.local.remove(["authToken", "user"]);
-    throw new Error("Authentication required");
-  }
-
-  return response;
+export interface TabGroup {
+  id: string;
+  name: string;
+  pinned: boolean;
+  tabs: TabData[];
+  updatedAt: string;
+  deleted?: boolean;
+  dirty?: boolean;
 }
 
-export async function checkBackendHealth(): Promise<boolean> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/health`);
-    return response.ok;
-  } catch (error) {
-    console.error('Backend health check failed:', error);
-    return false;
-  }
-}
-
-export async function googleLogin(): Promise<{
-  token: string;
-  user: { id: number; email: string; name?: string; picture?: string };
-}> {
-  const backendAvailable = await checkBackendHealth();
-  if (!backendAvailable) {
-    throw new Error("Backend server is not available. Please ensure the server is running on http://localhost:3000");
-  }
-
-  await chrome.storage.local.remove(['googleLoginResult']);
-
-  return new Promise((resolve, reject) => {
-    let resolved = false;
-    const loginId = Date.now().toString();
-    const startTime = Date.now();
-
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        chrome.storage.onChanged.removeListener(storageListener);
-        clearInterval(pollInterval);
-        reject(new Error("Login request timed out after 45 seconds. Please check the backend server is running and try again."));
-      }
-    }, 45000);
-
-    const storageListener = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
-      if (!resolved && areaName === 'local' && changes.googleLoginResult) {
-        const result = changes.googleLoginResult.newValue;
-        if (result && result.timestamp && result.timestamp >= startTime) {
-          resolved = true;
-          clearTimeout(timeout);
-          clearInterval(pollInterval);
-          chrome.storage.onChanged.removeListener(storageListener);
-          
-          chrome.storage.local.remove(['googleLoginResult']);
-          
-          if (result.success) {
-            resolve(result.data);
-          } else {
-            reject(new Error(result.error || "Login failed"));
-          }
-        }
-      }
-    };
-
-    let pollCount = 0;
-    const pollInterval = setInterval(async () => {
-      if (resolved) {
-        clearInterval(pollInterval);
-        return;
-      }
-
-      pollCount++;
-      if (pollCount % 10 === 0) {
-        console.log(`[API] Still polling for login result... (${pollCount * 0.5}s)`);
-      }
-
-      try {
-        const stored = await chrome.storage.local.get(['googleLoginResult']);
-        const result = stored.googleLoginResult;
-        
-        if (result && result.timestamp && result.timestamp >= startTime) {
-          console.log('[API] Found login result via polling:', result.success ? 'success' : 'error');
-          resolved = true;
-          clearTimeout(timeout);
-          clearInterval(pollInterval);
-          chrome.storage.onChanged.removeListener(storageListener);
-          
-          await chrome.storage.local.remove(['googleLoginResult']);
-          
-          if (result.success) {
-            resolve(result.data);
-          } else {
-            reject(new Error(result.error || "Login failed"));
-          }
-        }
-      } catch (error) {
-        console.error('[API] Error polling for login result:', error);
-      }
-      }, 500);
-
-    chrome.storage.onChanged.addListener(storageListener);
-
-    console.log('[API] Sending login message to background script, loginId:', loginId);
-    
-    try {
-      chrome.runtime.sendMessage({ 
-        action: "googleLogin",
-        loginId: loginId 
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          const errorMsg = chrome.runtime.lastError.message || '';
-          if (errorMsg.includes('port') || errorMsg.includes('closed')) {
-            console.log('[API] Message port closed (expected), using storage polling instead');
-          } else {
-            console.warn('[API] Error sending message:', chrome.runtime.lastError);
-          }
-        } else if (response) {
-          console.log('[API] Received immediate response:', response);
-          if (!resolved) {
-            resolved = true;
-            clearTimeout(timeout);
-            clearInterval(pollInterval);
-            chrome.storage.onChanged.removeListener(storageListener);
-            if (response.success) {
-              resolve(response.data);
-            } else {
-              reject(new Error(response.error || "Login failed"));
-            }
-          }
-        } else {
-          console.log('[API] No immediate response, using storage polling');
-        }
-      });
-    } catch (error) {
-      console.warn('[API] Exception sending message (will use polling):', error);
-    }
-  });
-}
-
-export async function saveTabsToBackend(
-  tabs: Array<{ url: string; title: string; favIconUrl?: string }>,
-  groupLabel?: string
-): Promise<{ success: boolean; sessionId: number }> {
-  const response = await apiRequest("/api/tabs/save", {
-    method: "POST",
-    body: JSON.stringify({ tabs, groupLabel }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to save tabs to backend");
-  }
-
-  return response.json();
-}
-
-export async function loadSessionsFromBackend(): Promise<{
-  success: boolean;
-  sessions: Array<{
-    id: string;
-    timestamp: number;
-    groupLabel?: string;
-    tabs: Array<{
-      id: string;
-      url: string;
-      title: string;
-      favIconUrl?: string;
-      timestamp: number;
-    }>;
-  }>;
-}> {
-  const response = await apiRequest("/api/tabs/sessions", {
-    method: "GET",
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to load sessions from backend");
-  }
-
-  return response.json();
-}
-
-export async function deleteSessionFromBackend(
-  sessionId: string
-): Promise<{ success: boolean }> {
-  const numericId = sessionId.replace("session-", "");
-  const response = await apiRequest(`/api/tabs/sessions/${numericId}`, {
-    method: "DELETE",
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to delete session from backend");
-  }
-
-  return response.json();
-}
-
-export async function isAuthenticated(): Promise<boolean> {
-  const token = await getAuthToken();
-  return !!token;
-}
-
-export async function getCurrentUser(): Promise<{
+export interface AuthUser {
   id: number;
   email: string;
   name?: string;
   picture?: string;
-} | null> {
+}
+
+function storageGet<T extends Record<string, unknown>>(
+  keys: string[]
+): Promise<T> {
   return new Promise((resolve) => {
-    chrome.storage.local.get(["user"], (result) => {
-      resolve(result.user || null);
-    });
+    chrome.storage.local.get(keys, (result) => resolve(result as T));
   });
+}
+
+function storageSet(data: Record<string, unknown>): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.storage.local.set(data, () => resolve());
+  });
+}
+
+function sendMessage<T = unknown>(payload: Record<string, unknown>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.runtime.sendMessage(payload, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve(response as T);
+      });
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
+  });
+}
+
+/** Migrate old savedSessions → tabGroups once (guest data from earlier builds) */
+export async function migrateLegacySessions(): Promise<void> {
+  const result = await storageGet<{
+    tabGroups?: TabGroup[];
+    savedSessions?: Array<{
+      id: string;
+      timestamp: number;
+      groupLabel?: string;
+      tabs: Array<{ url: string; title: string; favIconUrl?: string }>;
+    }>;
+  }>(["tabGroups", "savedSessions"]);
+
+  const existing = (result.tabGroups || []).filter((g) => !g.deleted);
+  const legacy = result.savedSessions || [];
+  if (legacy.length === 0) return;
+
+  const migrated: TabGroup[] = legacy.map((s) => ({
+    id: crypto.randomUUID(),
+    name: s.groupLabel || `Session ${new Date(s.timestamp).toLocaleString()}`,
+    pinned: false,
+    tabs: (s.tabs || []).map((t, i) => ({
+      url: t.url,
+      title: t.title || "Untitled",
+      favIconUrl: t.favIconUrl || null,
+      position: i,
+    })),
+    updatedAt: new Date(s.timestamp || Date.now()).toISOString(),
+    deleted: false,
+    dirty: true,
+  }));
+
+  await storageSet({
+    tabGroups: [...migrated, ...existing],
+    savedSessions: [],
+  });
+}
+
+async function readGroups(): Promise<TabGroup[]> {
+  await migrateLegacySessions();
+  const { tabGroups = [] } = await storageGet<{ tabGroups?: TabGroup[] }>([
+    "tabGroups",
+  ]);
+  return (tabGroups || []).filter((g) => !g.deleted);
+}
+
+async function writeGroups(groups: TabGroup[]): Promise<void> {
+  await storageSet({ tabGroups: groups });
+  // Best-effort sync if logged in — never blocks guest mode
+  sendMessage({ action: "pushDirty" }).catch(() => {});
+}
+
+export async function googleLogin(): Promise<{
+  token: string;
+  refreshToken: string;
+  deviceId: string;
+  user: AuthUser;
+}> {
+  const response = await sendMessage<{
+    success: boolean;
+    data?: {
+      token: string;
+      refreshToken: string;
+      deviceId: string;
+      user: AuthUser;
+    };
+    error?: string;
+  }>({ action: "googleLogin" });
+
+  if (!response?.success || !response.data) {
+    throw new Error(response?.error || "Login failed");
+  }
+  return response.data;
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await sendMessage({ action: "logout" });
+  } catch {
+    await chrome.storage.local.remove([
+      "authToken",
+      "refreshToken",
+      "user",
+      "deviceId",
+      "lastSyncedAt",
+    ]);
+  }
+}
+
+export async function getAuthState(): Promise<{
+  loggedIn: boolean;
+  user: AuthUser | null;
+}> {
+  try {
+    const viaBg = await sendMessage<{ loggedIn: boolean; user: AuthUser | null }>({
+      action: "getAuthState",
+    });
+    if (viaBg) return viaBg;
+  } catch {
+    // fall through to storage
+  }
+  const { authToken, user } = await storageGet<{
+    authToken?: string;
+    user?: AuthUser;
+  }>(["authToken", "user"]);
+  return { loggedIn: !!authToken, user: user || null };
+}
+
+export async function isAuthenticated(): Promise<boolean> {
+  const state = await getAuthState();
+  return state.loggedIn;
+}
+
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const state = await getAuthState();
+  return state.user;
+}
+
+/** Always reads local storage — works fully offline / as guest */
+export async function getGroups(): Promise<TabGroup[]> {
+  return readGroups();
+}
+
+export async function saveTabsAsGroup(
+  tabs: TabData[],
+  name?: string
+): Promise<TabGroup> {
+  const groups = await readGroups();
+  const newGroup: TabGroup = {
+    id: crypto.randomUUID(),
+    name: name || `Session ${new Date().toLocaleString()}`,
+    pinned: false,
+    tabs: tabs.map((t, i) => ({
+      url: t.url,
+      title: t.title || "Untitled",
+      favIconUrl: t.favIconUrl || null,
+      position: t.position ?? i,
+    })),
+    updatedAt: new Date().toISOString(),
+    deleted: false,
+    dirty: true,
+  };
+  await writeGroups([newGroup, ...groups]);
+  return newGroup;
+}
+
+export async function renameGroup(groupId: string, name: string): Promise<void> {
+  const groups = await readGroups();
+  await writeGroups(
+    groups.map((g) =>
+      g.id === groupId
+        ? { ...g, name, updatedAt: new Date().toISOString(), dirty: true }
+        : g
+    )
+  );
+}
+
+export async function togglePin(groupId: string): Promise<void> {
+  const groups = await readGroups();
+  await writeGroups(
+    groups.map((g) =>
+      g.id === groupId
+        ? {
+            ...g,
+            pinned: !g.pinned,
+            updatedAt: new Date().toISOString(),
+            dirty: true,
+          }
+        : g
+    )
+  );
+}
+
+export async function deleteGroup(groupId: string): Promise<void> {
+  const groups = await readGroups();
+  const updated = groups.map((g) =>
+    g.id === groupId
+      ? { ...g, deleted: true, updatedAt: new Date().toISOString(), dirty: true }
+      : g
+  );
+  // Keep soft-deleted until sync, but hide from UI by filtering on read
+  await storageSet({ tabGroups: updated });
+  sendMessage({ action: "pushDirty" }).catch(() => {});
+}
+
+export async function deleteTabFromGroup(
+  groupId: string,
+  tabIndex: number
+): Promise<TabGroup[]> {
+  const all = await storageGet<{ tabGroups?: TabGroup[] }>(["tabGroups"]);
+  const groups = all.tabGroups || [];
+  const updated = groups.map((g) => {
+    if (g.id !== groupId) return g;
+    const nextTabs = g.tabs.filter((_, i) => i !== tabIndex);
+    if (nextTabs.length === 0) {
+      return {
+        ...g,
+        tabs: [],
+        deleted: true,
+        updatedAt: new Date().toISOString(),
+        dirty: true,
+      };
+    }
+    return {
+      ...g,
+      tabs: nextTabs.map((t, i) => ({ ...t, position: i })),
+      updatedAt: new Date().toISOString(),
+      dirty: true,
+    };
+  });
+  await storageSet({ tabGroups: updated });
+  sendMessage({ action: "pushDirty" }).catch(() => {});
+  return updated.filter((g) => !g.deleted);
+}
+
+export async function restoreTabs(urls: string[]): Promise<void> {
+  try {
+    await sendMessage({ action: "restoreTabs", urls });
+  } catch {
+    for (const url of urls) {
+      await chrome.tabs.create({ url });
+    }
+  }
+}
+
+export async function restoreSingleTab(url: string): Promise<void> {
+  try {
+    await sendMessage({ action: "restoreSingleTab", url });
+  } catch {
+    await chrome.tabs.create({ url });
+  }
+}
+
+export async function closeTabs(tabIds: number[]): Promise<void> {
+  try {
+    await sendMessage({ action: "closeTabs", tabIds });
+  } catch {
+    await chrome.tabs.remove(tabIds);
+  }
+}
+
+export async function manualSync(): Promise<TabGroup[]> {
+  const response = await sendMessage<{
+    success: boolean;
+    groups?: TabGroup[];
+    error?: string;
+  }>({ action: "manualSync" });
+
+  if (!response?.success) {
+    throw new Error(response?.error || "Sync failed");
+  }
+  return response.groups || (await readGroups());
+}
+
+export function normalizeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    u.hash = "";
+    let path = u.pathname;
+    if (path.endsWith("/") && path.length > 1) path = path.slice(0, -1);
+    u.pathname = path;
+    return u.toString().toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
+export function findDuplicateOpenTabs(
+  tabs: Array<{ id: string; url: string }>
+): Map<string, string[]> {
+  const byUrl = new Map<string, string[]>();
+  for (const tab of tabs) {
+    const key = normalizeUrl(tab.url);
+    const existing = byUrl.get(key) || [];
+    existing.push(tab.id);
+    byUrl.set(key, existing);
+  }
+  for (const [key, ids] of byUrl) {
+    if (ids.length < 2) byUrl.delete(key);
+  }
+  return byUrl;
 }

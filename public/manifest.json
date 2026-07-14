@@ -1,16 +1,18 @@
 {
   "manifest_version": 3,
   "name": "TooManyTabs",
-  "version": "0.0.1",
-  "description": "Save all open tabs into a list, just like OneTab",
+  "version": "0.1.0",
+  "description": "Save, organize, and sync tabs across devices",
   "permissions": [
     "tabs",
     "storage",
     "contextMenus",
-    "identity"
+    "identity",
+    "alarms"
   ],
   "host_permissions": [
-    "http://localhost:3000/*"
+    "http://localhost:3000/*",
+    "https://*/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -21,11 +23,14 @@
     "128": "icon.svg"
   },
   "oauth2": {
-    "client_id": "449556864758-82anektffjkus6dgd5qe37qnqhbmce2n.apps.googleusercontent.com",
+    "client_id": "190659497018-47k9282ahh45v956e68qkbr9c5iheu7g.apps.googleusercontent.com",
     "scopes": [
       "openid",
       "email",
       "profile"
     ]
+  },
+  "action": {
+    "default_title": "TooManyTabs"
   }
 }

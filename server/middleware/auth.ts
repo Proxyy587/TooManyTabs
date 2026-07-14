@@ -1,10 +1,14 @@
 import type { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import { verifyAccessToken } from "../lib/jwt.js";
 
 export interface AuthenticatedRequest extends Request {
+  userId?: number;
+  email?: string;
+  deviceId?: string;
   user?: {
     userId: string;
     email: string;
+    deviceId?: string;
   };
 }
 
@@ -15,25 +19,30 @@ export const authMiddleware = (
 ) => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ message: "No token provided" });
     }
 
     const token = authHeader.substring(7);
-    
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({ message: "JWT secret not configured" });
+    const decoded = verifyAccessToken(token);
+
+    const userId = parseInt(decoded.userId, 10);
+    if (isNaN(userId)) {
+      return res.status(401).json({ message: "Invalid token payload" });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET) as {
-      userId: string;
-      email: string;
+    req.userId = userId;
+    req.email = decoded.email;
+    req.deviceId = decoded.deviceId;
+    req.user = {
+      userId: decoded.userId,
+      email: decoded.email,
+      deviceId: decoded.deviceId,
     };
 
-    req.user = decoded;
     next();
-  } catch (error) {
+  } catch {
     return res.status(401).json({ message: "Invalid or expired token" });
   }
 };
