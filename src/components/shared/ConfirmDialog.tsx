@@ -25,40 +25,38 @@ export function ConfirmDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
-        className="max-w-sm border p-0 sm:rounded-2xl"
+        className="max-w-sm border p-0 sm:rounded-3xl"
         style={{
-          background: "var(--tmt-surface)",
-          borderColor: "var(--tmt-line-strong)",
-          color: "var(--tmt-ink)",
+          background: "var(--paper-2)",
+          borderColor: "var(--line-2)",
+          color: "var(--ink)",
         }}
       >
         <div className="space-y-5 p-6">
           <DialogHeader>
-            <DialogTitle className="font-display" style={{ color: "var(--tmt-ink)" }}>
+            <DialogTitle className="font-display text-xl" style={{ color: "var(--ink)", fontWeight: 700 }}>
               {title}
             </DialogTitle>
-            <DialogDescription style={{ color: "var(--tmt-ink-soft)" }}>
-              {description}
-            </DialogDescription>
+            <DialogDescription style={{ color: "var(--ink-3)" }}>{description}</DialogDescription>
           </DialogHeader>
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <Button
               variant="outline"
-              className="flex-1 rounded-xl border"
+              className="flex-1 rounded-full border"
               onClick={onClose}
-              style={{ borderColor: "var(--tmt-line)", color: "var(--tmt-ink)" }}
+              style={{ borderColor: "var(--line-2)", color: "var(--ink)" }}
             >
               Cancel
             </Button>
             <Button
-              className="flex-1 rounded-xl"
+              className="flex-1 rounded-full"
               onClick={() => {
                 onConfirm()
                 onClose()
               }}
               style={{
-                background: dangerous ? "var(--tmt-danger)" : "var(--tmt-accent)",
-                color: "#fffcf7",
+                background: dangerous ? "var(--danger)" : "var(--ink)",
+                color: "#fff",
               }}
             >
               {confirmLabel}
