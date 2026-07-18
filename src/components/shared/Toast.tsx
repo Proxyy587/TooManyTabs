@@ -21,9 +21,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const toast = useCallback((message: string, kind: ToastKind = "info") => {
     const id = crypto.randomUUID()
     setItems((prev) => [...prev, { id, message, kind }])
-    setTimeout(() => {
-      setItems((prev) => prev.filter((t) => t.id !== id))
-    }, 3200)
+    setTimeout(() => setItems((prev) => prev.filter((t) => t.id !== id)), 3000)
   }, [])
 
   const value = useMemo(() => ({ toast }), [toast])
@@ -31,38 +29,27 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div
-        className="fixed bottom-6 left-1/2 z-[100] flex w-[min(92vw,420px)] -translate-x-1/2 flex-col gap-2 pointer-events-none"
-        aria-live="polite"
-      >
+      <div className="fixed bottom-6 left-1/2 z-[100] flex w-[min(92vw,400px)] -translate-x-1/2 flex-col gap-2 pointer-events-none">
         {items.map((item) => {
-          const Icon =
-            item.kind === "success"
-              ? CheckCircle2
-              : item.kind === "error"
-                ? AlertCircle
-                : Info
+          const Icon = item.kind === "success" ? CheckCircle2 : item.kind === "error" ? AlertCircle : Info
           const accent =
-            item.kind === "success"
-              ? "#34D399"
-              : item.kind === "error"
-                ? "#F87171"
-                : "#60A5FA"
+            item.kind === "success" ? "var(--tmt-ok)" : item.kind === "error" ? "var(--tmt-danger)" : "var(--tmt-accent)"
           return (
             <div
               key={item.id}
-              className="pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2"
+              className="pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3 tmt-enter"
               style={{
-                background: "rgba(20, 20, 22, 0.92)",
-                borderColor: "rgba(255,255,255,0.12)",
-                color: "#F5F5F5",
+                background: "var(--tmt-surface)",
+                borderColor: "var(--tmt-line-strong)",
+                boxShadow: "var(--tmt-shadow-lg)",
+                color: "var(--tmt-ink)",
               }}
             >
               <Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: accent }} />
               <p className="flex-1 text-sm leading-snug">{item.message}</p>
               <button
                 type="button"
-                className="opacity-50 hover:opacity-100"
+                className="opacity-40 hover:opacity-100"
                 aria-label="Dismiss"
                 onClick={() => setItems((prev) => prev.filter((t) => t.id !== item.id))}
               >

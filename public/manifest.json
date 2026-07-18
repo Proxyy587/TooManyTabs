@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "TooManyTabs",
-  "version": "0.1.0",
-  "description": "Save, organize, and sync tabs across devices",
+  "version": "0.2.0",
+  "description": "A cozy shelf for your tabs — save, group, and sync across devices",
   "permissions": [
     "tabs",
     "storage",
@@ -12,6 +12,7 @@
   ],
   "host_permissions": [
     "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*",
     "https://*/*"
   ],
   "background": {
@@ -23,7 +24,7 @@
     "128": "icon.svg"
   },
   "oauth2": {
-    "client_id": "190659497018-47k9282ahh45v956e68qkbr9c5iheu7g.apps.googleusercontent.com",
+    "client_id": "449556864758-gruk9uu3dh8c0g7ir2hmc652kk4gi5l1.apps.googleusercontent.com",
     "scopes": [
       "openid",
       "email",

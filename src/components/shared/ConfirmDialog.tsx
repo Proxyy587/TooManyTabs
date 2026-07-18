@@ -21,28 +21,32 @@ export function ConfirmDialog({
   dangerous,
   onClose,
   onConfirm,
-  textColor = "#F5F5F5",
-  deleteColor = "#F87171",
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         className="max-w-sm border p-0 sm:rounded-2xl"
-        style={{ background: "#141416", borderColor: "rgba(255,255,255,0.12)", color: textColor }}
+        style={{
+          background: "var(--tmt-surface)",
+          borderColor: "var(--tmt-line-strong)",
+          color: "var(--tmt-ink)",
+        }}
       >
-        <div className="p-6 space-y-5">
+        <div className="space-y-5 p-6">
           <DialogHeader>
-            <DialogTitle style={{ color: textColor }}>{title}</DialogTitle>
-            <DialogDescription className="opacity-60" style={{ color: textColor }}>
+            <DialogTitle className="font-display" style={{ color: "var(--tmt-ink)" }}>
+              {title}
+            </DialogTitle>
+            <DialogDescription style={{ color: "var(--tmt-ink-soft)" }}>
               {description}
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-3">
             <Button
               variant="outline"
-              className="flex-1 rounded-xl"
+              className="flex-1 rounded-xl border"
               onClick={onClose}
-              style={{ borderColor: "rgba(255,255,255,0.15)", color: textColor }}
+              style={{ borderColor: "var(--tmt-line)", color: "var(--tmt-ink)" }}
             >
               Cancel
             </Button>
@@ -53,8 +57,8 @@ export function ConfirmDialog({
                 onClose()
               }}
               style={{
-                background: dangerous ? deleteColor : "#60A5FA",
-                color: dangerous ? "#1a1a1a" : "#0a0a0a",
+                background: dangerous ? "var(--tmt-danger)" : "var(--tmt-accent)",
+                color: "#fffcf7",
               }}
             >
               {confirmLabel}

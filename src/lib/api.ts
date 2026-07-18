@@ -181,7 +181,7 @@ export async function saveTabsAsGroup(
   const groups = await readGroups();
   const newGroup: TabGroup = {
     id: crypto.randomUUID(),
-    name: name || `Session ${new Date().toLocaleString()}`,
+    name: name || `Shelf ${new Date().toLocaleString()}`,
     pinned: false,
     tabs: tabs.map((t, i) => ({
       url: t.url,
@@ -195,6 +195,162 @@ export async function saveTabsAsGroup(
   };
   await writeGroups([newGroup, ...groups]);
   return newGroup;
+}
+
+/** Append tabs into an existing folder/group */
+export async function appendTabsToGroup(
+  groupId: string,
+  tabs: TabData[]
+): Promise<TabGroup[]> {
+  const groups = await readGroups();
+  const updated = groups.map((g) => {
+    if (g.id !== groupId) return g;
+    const merged = [
+      ...g.tabs,
+      ...tabs.map((t, i) => ({
+        url: t.url,
+        title: t.title || "Untitled",
+        favIconUrl: t.favIconUrl || null,
+        position: g.tabs.length + i,
+      })),
+    ];
+    return {
+      ...g,
+      tabs: merged,
+      updatedAt: new Date().toISOString(),
+      dirty: true,
+    };
+  });
+  await writeGroups(updated);
+  return updated;
+}
+
+/** Move a single tab from one group to another */
+export async function moveTabToGroup(
+  fromGroupId: string,
+  tabIndex: number,
+  toGroupId: string
+): Promise<TabGroup[]> {
+  const groups = await readGroups();
+  const from = groups.find((g) => g.id === fromGroupId);
+  if (!from || tabIndex < 0 || tabIndex >= from.tabs.length) return groups;
+  const tab = from.tabs[tabIndex];
+  if (!tab) return groups;
+
+  const updated = groups
+    .map((g) => {
+      if (g.id === fromGroupId) {
+        const nextTabs = g.tabs.filter((_, i) => i !== tabIndex);
+        return {
+          ...g,
+          tabs: nextTabs.map((t, i) => ({ ...t, position: i })),
+          updatedAt: new Date().toISOString(),
+          dirty: true,
+          deleted: nextTabs.length === 0 ? true : g.deleted,
+        };
+      }
+      if (g.id === toGroupId) {
+        return {
+          ...g,
+          tabs: [
+            ...g.tabs,
+            { ...tab, position: g.tabs.length },
+          ],
+          updatedAt: new Date().toISOString(),
+          dirty: true,
+        };
+      }
+      return g;
+    })
+    .filter((g) => !(g.deleted && g.tabs.length === 0));
+
+  // Soft-delete empty source in storage for sync
+  const withSoft = groups.map((g) => {
+    if (g.id !== fromGroupId) {
+      const target = updated.find((u) => u.id === g.id);
+      return target || g;
+    }
+    const nextTabs = g.tabs.filter((_, i) => i !== tabIndex);
+    if (nextTabs.length === 0) {
+      return {
+        ...g,
+        tabs: [],
+        deleted: true,
+        updatedAt: new Date().toISOString(),
+        dirty: true,
+      };
+    }
+    return {
+      ...g,
+      tabs: nextTabs.map((t, i) => ({ ...t, position: i })),
+      updatedAt: new Date().toISOString(),
+      dirty: true,
+    };
+  }).map((g) => {
+    if (g.id !== toGroupId) return g;
+    const already = updated.find((u) => u.id === toGroupId);
+    return already || g;
+  });
+
+  await storageSet({ tabGroups: withSoft });
+  sendMessage({ action: "pushDirty" }).catch(() => {});
+  return withSoft.filter((g) => !g.deleted);
+}
+
+/** Merge multiple groups into one named folder */
+export async function mergeGroups(
+  groupIds: string[],
+  name: string
+): Promise<TabGroup[]> {
+  const groups = await readGroups();
+  const toMerge = groups.filter((g) => groupIds.includes(g.id));
+  if (toMerge.length === 0) return groups;
+
+  const mergedTabs: TabData[] = [];
+  toMerge.forEach((g) => {
+    g.tabs.forEach((t) => mergedTabs.push({ ...t }));
+  });
+
+  const newGroup: TabGroup = {
+    id: crypto.randomUUID(),
+    name,
+    pinned: toMerge.some((g) => g.pinned),
+    tabs: mergedTabs.map((t, i) => ({ ...t, position: i })),
+    updatedAt: new Date().toISOString(),
+    deleted: false,
+    dirty: true,
+  };
+
+  const idSet = new Set(groupIds);
+  const rest = groups.map((g) =>
+    idSet.has(g.id)
+      ? { ...g, deleted: true, tabs: [], updatedAt: new Date().toISOString(), dirty: true }
+      : g
+  );
+
+  await storageSet({ tabGroups: [newGroup, ...rest] });
+  sendMessage({ action: "pushDirty" }).catch(() => {});
+  return [newGroup, ...rest.filter((g) => !g.deleted)];
+}
+
+export function suggestDomainGroups(
+  tabs: TabData[]
+): Array<{ domain: string; tabs: TabData[] }> {
+  const map = new Map<string, TabData[]>();
+  for (const tab of tabs) {
+    let domain = "other";
+    try {
+      domain = new URL(tab.url).hostname.replace(/^www\./, "");
+    } catch {
+      /* ignore */
+    }
+    const list = map.get(domain) || [];
+    list.push(tab);
+    map.set(domain, list);
+  }
+  return Array.from(map.entries())
+    .map(([domain, domainTabs]) => ({ domain, tabs: domainTabs }))
+    .sort((a, b) => b.tabs.length - a.tabs.length);
 }
 
 export async function renameGroup(groupId: string, name: string): Promise<void> {

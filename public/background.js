@@ -1,8 +1,10 @@
 console.log("[TooManyTabs] background service worker loaded");
 
 const API_BASE_URL = "http://localhost:3000";
+// Must match server/.env GOOGLE_CLIENT_ID (Web application client with secret).
+// Do NOT use process.env here — service workers don't have Vite/Node env injection.
 const GOOGLE_CLIENT_ID =
-  "190659497018-47k9282ahh45v956e68qkbr9c5iheu7g.apps.googleusercontent.com";
+  "449556864758-gruk9uu3dh8c0g7ir2hmc652kk4gi5l1.apps.googleusercontent.com";
 const SYNC_ALARM_NAME = "toomanytabs-periodic-sync";
 const SYNC_INTERVAL_MINUTES = 5;
 
@@ -275,10 +277,54 @@ async function completeBackendAuth(payload) {
   return data;
 }
 
-// Prefer Chrome's built-in Google account token (avoids invalid_request from WebAuthFlow
-// when the Cloud project / client type is misconfigured). Fall back to code+PKCE.
+// Web application client + PKCE is primary (matches server GOOGLE_CLIENT_ID/SECRET).
+// getAuthToken is a Chrome-only fallback when oauth2.client_id is a Chrome Extension client.
 async function loginWithGoogle() {
-  // Path 1: getAuthToken — uses the oauth2 block in manifest.json
+  const redirectUri = chrome.identity.getRedirectURL();
+  const errors = [];
+
+  // Path 1: launchWebAuthFlow + authorization code + PKCE
+  try {
+    if (!GOOGLE_CLIENT_ID) {
+      throw new Error("GOOGLE_CLIENT_ID is not configured in background.js");
+    }
+
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+    const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    authUrl.searchParams.set("client_id", GOOGLE_CLIENT_ID);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("scope", "openid email profile");
+    authUrl.searchParams.set("code_challenge", codeChallenge);
+    authUrl.searchParams.set("code_challenge_method", "S256");
+    authUrl.searchParams.set("prompt", "select_account");
+
+    const redirectResult = await chrome.identity.launchWebAuthFlow({
+      url: authUrl.toString(),
+      interactive: true,
+    });
+
+    if (!redirectResult) throw new Error("Login cancelled");
+
+    const resultUrl = new URL(redirectResult);
+    const oauthError = resultUrl.searchParams.get("error");
+    if (oauthError) {
+      throw new Error(`Google: ${oauthError} (${resultUrl.searchParams.get("error_description") || ""})`);
+    }
+
+    const code = resultUrl.searchParams.get("code");
+    if (!code) throw new Error("No authorization code in redirect");
+
+    console.log("[auth] WebAuthFlow code received, exchanging via backend");
+    return await completeBackendAuth({ code, codeVerifier, redirectUri });
+  } catch (err) {
+    console.warn("[auth] WebAuthFlow failed:", err?.message || err);
+    errors.push(`WebAuthFlow: ${err?.message || err}`);
+  }
+
+  // Path 2: Chrome getAuthToken (needs Chrome Extension OAuth client in manifest.oauth2)
   try {
     const accessToken = await new Promise((resolve, reject) => {
       chrome.identity.getAuthToken({ interactive: true }, (token) => {
@@ -296,57 +342,15 @@ async function loginWithGoogle() {
     console.log("[auth] getAuthToken succeeded");
     return await completeBackendAuth({ accessToken });
   } catch (err) {
-    console.warn("[auth] getAuthToken failed, trying WebAuthFlow:", err?.message || err);
+    console.warn("[auth] getAuthToken failed:", err?.message || err);
+    errors.push(`getAuthToken: ${err?.message || err}`);
   }
 
-  // Path 2: launchWebAuthFlow + PKCE (needs Web client + GOOGLE_CLIENT_SECRET on server)
-  const redirectUri = chrome.identity.getRedirectURL();
-  const codeVerifier = generateCodeVerifier();
-  const codeChallenge = await generateCodeChallenge(codeVerifier);
-
-  const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-  authUrl.searchParams.set("client_id", GOOGLE_CLIENT_ID);
-  authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("redirect_uri", redirectUri);
-  authUrl.searchParams.set("scope", "openid email profile");
-  authUrl.searchParams.set("code_challenge", codeChallenge);
-  authUrl.searchParams.set("code_challenge_method", "S256");
-  authUrl.searchParams.set("prompt", "select_account");
-
-  let redirectResult;
-  try {
-    redirectResult = await chrome.identity.launchWebAuthFlow({
-      url: authUrl.toString(),
-      interactive: true,
-    });
-  } catch (err) {
-    throw new Error(
-      `Google login failed (${err?.message || err}).\n\n` +
-        `Your OAuth client (project "seguroamigo") is likely the wrong type.\n` +
-        `Fix:\n` +
-        `1. Google Cloud → create a NEW "Chrome Extension" OAuth client, paste Client ID into manifest.json oauth2.client_id + background.js\n` +
-        `   OR create a "Web application" client, add redirect URI:\n   ${redirectUri}\n` +
-        `   and set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET in server/.env\n` +
-        `2. Restart server, rebuild extension, reload unpacked`
-    );
-  }
-
-  if (!redirectResult) {
-    throw new Error("Google login was cancelled.");
-  }
-
-  const resultUrl = new URL(redirectResult);
-  const oauthError = resultUrl.searchParams.get("error");
-  if (oauthError) {
-    throw new Error(`Google returned: ${oauthError}`);
-  }
-
-  const code = resultUrl.searchParams.get("code");
-  if (!code) {
-    throw new Error("No authorization code returned from Google");
-  }
-
-  return completeBackendAuth({ code, codeVerifier, redirectUri });
+  throw new Error(
+    `Google sign-in failed.\n\n${errors.join("\n")}\n\n` +
+      `Add this redirect URI to your Web OAuth client:\n${redirectUri}\n` +
+      `Client ID must match server/.env and background.js.`
+  );
 }
 
 async function logout() {

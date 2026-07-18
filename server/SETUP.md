@@ -45,42 +45,26 @@ Health check: http://localhost:3000/health
 
 ## 2. Google OAuth (fixes "Access blocked / invalid_request")
 
-Google blocks the old `id_token` implicit flow for many apps (that's the 400 you saw under a project name like "seguroamigo"). TooManyTabs now uses **authorization code + PKCE**.
+TooManyTabs uses **authorization code + PKCE** via `launchWebAuthFlow`, then exchanges the code on your server with `GOOGLE_CLIENT_SECRET`.
 
-### Create the correct client
+### Critical bug that was fixed
+The service worker had `process.env.GOOGLE_CLIENT_ID` — that is **always undefined** in Chrome extensions. Client ID is now hardcoded to match `server/.env`.
 
-1. [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials)
-2. **Create Credentials → OAuth client ID**
-3. Application type: **Web application** (not "Chrome Extension")
-4. Under **Authorized redirect URIs** add exactly:
+### Setup checklist
+
+1. Google Cloud → Credentials → **Web application** OAuth client
+2. Authorized redirect URIs — add exactly (your extension ID may differ):
    ```
-   https://ehbjaffafbfjjnmbljpicecdhbioafjj.chromiumapp.org/
+   https://<EXTENSION_ID>.chromiumapp.org/
    ```
-   (If your extension ID differs after a reinstall, use `chrome.identity.getRedirectURL()` from the service worker console.)
-5. Copy **Client ID** and **Client secret**
+   Find it: load the extension → service worker console → `chrome.identity.getRedirectURL()`
+3. Put the same values everywhere:
+   - `server/.env` → `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`
+   - `public/background.js` → `GOOGLE_CLIENT_ID` constant
+   - `public/manifest.json` → `oauth2.client_id`
+4. Restart API (`cd server && bun run dev`), `bun run build`, reload unpacked extension
 
-### Put them in config
-
-`server/.env` (both required):
-```env
-GOOGLE_CLIENT_ID=....apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-....
-```
-
-Same Client ID in:
-- `public/manifest.json` → `oauth2.client_id`
-- `public/background.js` → `GOOGLE_CLIENT_ID`
-
-Then restart the server and reload the extension.
-
-### Why login failed before
-
-| Cause | Fix |
-|-------|-----|
-| Implicit `id_token` flow blocked | Now uses auth code + PKCE |
-| Client type "Chrome Extension" used with WebAuthFlow | Use **Web application** |
-| Redirect URI missing | Must match `….chromiumapp.org/` exactly |
-| Missing client secret | Required for code exchange on the server |
+If WebAuthFlow still fails, Chrome `getAuthToken` is tried as a fallback (needs a Chrome Extension–type client in `manifest.oauth2`).
 
 ---
 

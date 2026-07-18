@@ -1,145 +1,68 @@
-/* ========================================
-   IMPORTS
-   ======================================== */
-@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* ========================================
-   CUSTOM VARIANTS
-   ======================================== */
 @custom-variant dark (&:is(.dark *));
 
-/* ========================================
-   CSS CUSTOM PROPERTIES - LIGHT MODE
-   ======================================== */
 :root {
-  /* Typography */
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.6;
+  /* Cozy mist — soft stone, teal ink, gentle coral play */
+  --tmt-bg: #f3f0ea;
+  --tmt-bg-deep: #ebe6dc;
+  --tmt-surface: #fffcf7;
+  --tmt-surface-2: #f7f3ec;
+  --tmt-ink: #1e2a32;
+  --tmt-ink-soft: #5c6b75;
+  --tmt-ink-faint: #8a969e;
+  --tmt-line: rgba(30, 42, 50, 0.08);
+  --tmt-line-strong: rgba(30, 42, 50, 0.14);
+  --tmt-accent: #2f7d6d;
+  --tmt-accent-soft: rgba(47, 125, 109, 0.12);
+  --tmt-accent-hover: #256557;
+  --tmt-play: #d97757;
+  --tmt-play-soft: rgba(217, 119, 87, 0.12);
+  --tmt-danger: #c45c5c;
+  --tmt-danger-soft: rgba(196, 92, 92, 0.12);
+  --tmt-ok: #3d8f6e;
+  --tmt-shadow: 0 1px 2px rgba(30, 42, 50, 0.04), 0 8px 24px rgba(30, 42, 50, 0.06);
+  --tmt-shadow-lg: 0 4px 8px rgba(30, 42, 50, 0.04), 0 20px 40px rgba(30, 42, 50, 0.08);
+  --tmt-radius: 18px;
+
+  --background: var(--tmt-bg);
+  --foreground: var(--tmt-ink);
+  --card: var(--tmt-surface);
+  --card-foreground: var(--tmt-ink);
+  --popover: var(--tmt-surface);
+  --popover-foreground: var(--tmt-ink);
+  --primary: var(--tmt-accent);
+  --primary-hover: var(--tmt-accent-hover);
+  --primary-foreground: #fffcf7;
+  --secondary: var(--tmt-surface-2);
+  --secondary-foreground: var(--tmt-ink);
+  --muted: var(--tmt-bg-deep);
+  --muted-foreground: var(--tmt-ink-soft);
+  --accent: var(--tmt-accent-soft);
+  --accent-foreground: var(--tmt-accent);
+  --destructive: var(--tmt-danger);
+  --destructive-foreground: #fff;
+  --border: var(--tmt-line);
+  --input: var(--tmt-surface);
+  --ring: rgba(47, 125, 109, 0.35);
+  --radius: 14px;
+
+  font-family: 'Outfit', system-ui, sans-serif;
+  line-height: 1.5;
   font-weight: 400;
+  color: var(--tmt-ink);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  /* Design Tokens */
-  --radius: 0;
-  
-  /* Colors - Light Mode */
-  --background: #fff;
-  --foreground: #000;
-  --card: #fff;
-  --card-foreground: #000;
-  --popover: #fff;
-  --popover-foreground: #000;
-  --primary: #ffdb33;
-  --primary-hover: #ffcc00;
-  --primary-foreground: #000;
-  --secondary: #000;
-  --secondary-foreground: #fff;
-  --muted: #aeaeae;
-  --muted-foreground: #5a5a5a;
-  --accent: #fae583;
-  --accent-foreground: #000;
-  --destructive: #e63946;
-  --destructive-foreground: #fff;
-  --border: #000;
-  --input: #fff;
-  --ring: rgba(0, 0, 0, 0.2);
-  
-  /* Chart Colors */
-  --chart-1: #ffdb33;
-  --chart-2: #fae583;
-  --chart-3: #ffcc00;
-  --chart-4: #e63946;
-  --chart-5: #5a5a5a;
-  
-  /* Sidebar Colors */
-  --sidebar: #fff;
-  --sidebar-foreground: #000;
-  --sidebar-primary: #ffdb33;
-  --sidebar-primary-foreground: #000;
-  --sidebar-accent: #fae583;
-  --sidebar-accent-foreground: #000;
-  --sidebar-border: #000;
-  --sidebar-ring: rgba(0, 0, 0, 0.2);
-  
-  /* Theme Custom Colors (can be overridden by JavaScript) */
-  --theme-background: #0A1929;
-  --theme-text: #FFFFFF;
-  --theme-accent: #FFFFFF;
-  --theme-restore: #FFFFFF;
-  --theme-delete: #FF4444;
 }
 
-/* ========================================
-   CSS CUSTOM PROPERTIES - DARK MODE
-   ======================================== */
-.dark {
-  /* Design Tokens */
-  --radius: 0;
-  
-  /* Colors - Dark Mode */
-  --background: #1a1a1a;
-  --foreground: #f5f5f5;
-  --card: #242424;
-  --card-foreground: #f5f5f5;
-  --popover: #242424;
-  --popover-foreground: #f5f5f5;
-  --primary: #ffdb33;
-  --primary-hover: #ffcc00;
-  --primary-foreground: #000;
-  --secondary: #3a3a3a;
-  --secondary-foreground: #f5f5f5;
-  --muted: #3f3f46;
-  --muted-foreground: #a0a0a0;
-  --accent: #fae583;
-  --accent-foreground: #000;
-  --destructive: #e63946;
-  --destructive-foreground: #fff;
-  --border: #3a3a3a;
-  --input: rgba(255, 255, 255, 0.1);
-  --ring: rgba(255, 255, 255, 0.3);
-  
-  /* Chart Colors */
-  --chart-1: #ffdb33;
-  --chart-2: #fae583;
-  --chart-3: #ffcc00;
-  --chart-4: #e63946;
-  --chart-5: #a0a0a0;
-  
-  /* Sidebar Colors */
-  --sidebar: #242424;
-  --sidebar-foreground: #f5f5f5;
-  --sidebar-primary: #ffdb33;
-  --sidebar-primary-foreground: #000;
-  --sidebar-accent: #3a3a3a;
-  --sidebar-accent-foreground: #f5f5f5;
-  --sidebar-border: #3a3a3a;
-  --sidebar-ring: rgba(255, 255, 255, 0.3);
-}
-
-/* ========================================
-   TAILWIND THEME CONFIGURATION
-   ======================================== */
 @theme {
-  /* Typography */
-  --font-head: 'Archivo Black', sans-serif;
-  --font-sans: 'Space Grotesk', sans-serif;
+  --font-sans: 'Outfit', system-ui, sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
   --radius: var(--radius);
- 
-  /* Shadows */
-  --shadow-xs: 1px 1px 0 0 var(--border);
-  --shadow-sm: 2px 2px 0 0 var(--border);
-  --shadow: 3px 3px 0 0 var(--border);
-  --shadow-md: 4px 4px 0 0 var(--border);
-  --shadow-lg: 6px 6px 0 0 var(--border);
-  --shadow-xl: 10px 10px 0 1px var(--border);
-  --shadow-2xl: 16px 16px 0 1px var(--border);
- 
-  /* Color Mappings */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
@@ -160,24 +83,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
 }
 
-/* ========================================
-   TAILWIND THEME INLINE (Radius Variants)
-   ======================================== */
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -185,35 +92,31 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* ========================================
-   BASE STYLES
-   ======================================== */
 body {
   margin: 0;
   min-width: 320px;
   overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background:
+    radial-gradient(ellipse 90% 60% at 10% -10%, rgba(47, 125, 109, 0.09), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 100% 0%, rgba(217, 119, 87, 0.07), transparent 50%),
+    var(--tmt-bg);
+  color: var(--tmt-ink);
 }
 
-/* ========================================
-   COMPONENT STYLES
-   ======================================== */
-.font-serif {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-weight: 400;
+.font-display {
+  font-family: 'Fraunces', Georgia, serif;
+  font-optical-sizing: auto;
   letter-spacing: -0.02em;
 }
 
 button {
   cursor: pointer;
-  transition: all 0.2s ease;
   font-family: inherit;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
 }
 
-button:focus,
 button:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.3);
+  outline: 2px solid var(--tmt-accent);
   outline-offset: 2px;
 }
 
@@ -222,91 +125,92 @@ button:disabled {
   opacity: 0.5;
 }
 
-a {
-  text-decoration: none;
-}
+a { text-decoration: none; }
 
-input[type="color"] {
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  cursor: pointer;
-}
-
-input[type="color"]::-webkit-color-swatch-wrapper {
-  padding: 0;
-}
-
-input[type="color"]::-webkit-color-swatch {
-  border: none;
-  border-radius: 6px;
-}
-
-input[type="text"] {
-  font-family: 'Fira Code', 'Courier New', monospace;
-}
-
-/* ========================================
-   SCROLLBAR STYLING
-   ======================================== */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-}
-
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+  background: rgba(30, 42, 50, 0.16);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
+::-webkit-scrollbar-thumb:hover { background: rgba(30, 42, 50, 0.28); background-clip: padding-box; }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-/* ========================================
-   TAILWIND BASE LAYER
-   ======================================== */
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+  * { @apply border-border outline-ring/50; }
 }
 
-/* ========================================
-   THEME CUSTOM COLOR UTILITIES
-   ======================================== */
-.theme-bg {
-  background-color: var(--theme-background) !important;
+/* Soft surface helpers */
+.tmt-panel {
+  background: var(--tmt-surface);
+  border: 1px solid var(--tmt-line);
+  border-radius: var(--tmt-radius);
+  box-shadow: var(--tmt-shadow);
 }
 
-.theme-text {
-  color: var(--theme-text) !important;
+.tmt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--tmt-line);
+  background: var(--tmt-surface);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--tmt-ink-soft);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.theme-accent {
-  color: var(--theme-accent) !important;
+.tmt-chip:hover {
+  background: var(--tmt-accent-soft);
+  border-color: rgba(47, 125, 109, 0.25);
+  color: var(--tmt-accent);
 }
 
-.theme-restore-button {
-  background-color: var(--theme-restore) !important;
-  color: var(--theme-text) !important;
+.tmt-chip[data-active="true"] {
+  background: var(--tmt-accent);
+  border-color: var(--tmt-accent);
+  color: #fffcf7;
 }
 
-.theme-restore-button:hover {
-  opacity: 0.9;
+.tmt-tab-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
-.theme-delete-button {
-  color: var(--theme-delete) !important;
+.tmt-tab-row:hover {
+  background: var(--tmt-accent-soft);
+  border-color: rgba(47, 125, 109, 0.12);
 }
 
-.theme-delete-button:hover {
-  background-color: color-mix(in srgb, var(--theme-delete) 20%, transparent) !important;
+.tmt-tab-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem;
+  border-radius: 16px;
+  border: 1px solid var(--tmt-line);
+  background: var(--tmt-surface);
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.tmt-tab-card:hover {
+  border-color: rgba(47, 125, 109, 0.22);
+  box-shadow: var(--tmt-shadow);
+  transform: translateY(-1px);
+}
+
+@keyframes tmt-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tmt-enter {
+  animation: tmt-fade-up 0.35s ease both;
 }
