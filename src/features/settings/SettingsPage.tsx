@@ -152,6 +152,24 @@ export function SettingsPage({
             </button>
           )}
         </div>
+        <div
+          className="rounded-sm border px-2.5 py-2 text-[11px] leading-relaxed"
+          style={{ borderColor: "var(--line)", background: "var(--paper)", color: "var(--ink-3)" }}
+        >
+          <p>
+            Google login needs OAuth type <strong style={{ color: "var(--ink)" }}>Chrome Extension</strong>
+            {" "}(not Web). Item ID must match this extension:
+          </p>
+          <p className="mt-1 font-mono text-[10px]" style={{ color: "var(--ink-2)" }}>
+            {typeof chrome !== "undefined" && chrome.runtime?.id
+              ? chrome.runtime.id
+              : "najlilhbfkkocnnhfaofffpfehcipahe"}
+          </p>
+          <p className="mt-1">
+            If you see Access blocked, create a new Chrome Extension client, put its Client ID in
+            root <code>.env</code>, run <code>bun run build</code>, reload <code>dist/</code>. See AUTH.md.
+          </p>
+        </div>
       </section>
 
       <section className="panel space-y-3 p-3">

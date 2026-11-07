@@ -249,23 +249,40 @@ async function writeGroups(groups: TabGroup[]): Promise<void> {
   sendMessage({ action: "pushDirty" }).catch(() => {});
 }
 
+function explainGoogleAuthError(raw: string): Error {
+  const msg = raw || "Google sign-in failed";
+
+  if (/access.?blocked|bad client|invalid_client|invalid.?request|OAuth2 request failed|Authorization page could not be loaded/i.test(msg)) {
+    return new Error(
+      "Google Access blocked — use a Chrome Extension OAuth client (not Web). " +
+        "In Google Cloud → Credentials → Create OAuth client → Application type: Chrome Extension, " +
+        `Item ID: ${chrome.runtime.id}. Put that Client ID in .env (no secret), then bun run build and reload dist/. ` +
+        "Also add your Gmail as a Test user. Details: AUTH.md"
+    );
+  }
+
+  if (/did not approve/i.test(msg)) {
+    return new Error(
+      "Google access was not approved. In the Google popup click Allow — don’t close it. " +
+        "If the app is in Testing mode, add your Gmail under OAuth consent screen → Test users. " +
+        `Extension ID must be ${chrome.runtime.id}.`
+    );
+  }
+
+  if (/Custom URI scheme is not supported/i.test(msg)) {
+    return new Error(
+      "This browser blocks Chrome Identity Google login (common in Brave). Use Google Chrome."
+    );
+  }
+
+  return new Error(msg);
+}
+
 function getGoogleAccessTokenFromPage(interactive = true): Promise<string> {
   return new Promise((resolve, reject) => {
     chrome.identity.getAuthToken({ interactive }, (result) => {
       if (chrome.runtime.lastError || !result) {
-        const raw = chrome.runtime.lastError?.message || "Google sign-in failed";
-        if (/did not approve/i.test(raw)) {
-          reject(
-            new Error(
-              "Google access was not approved. In the Google popup click Allow — " +
-                "don’t close it. If your app is in Testing mode, add your Gmail as a test user " +
-                "in Google Cloud → OAuth consent screen. Also confirm extension ID matches the " +
-                "Chrome Extension client Item ID."
-            )
-          );
-          return;
-        }
-        reject(new Error(raw));
+        reject(explainGoogleAuthError(chrome.runtime.lastError?.message || "Google sign-in failed"));
         return;
       }
       const token = typeof result === "string" ? result : result.token;

@@ -20,6 +20,19 @@ function injectExtensionEnv(mode: string): Plugin {
         );
       }
 
+      const hasSecret = Boolean((env.GOOGLE_CLIENT_SECRET || "").trim());
+      if (hasSecret) {
+        console.warn(
+          "[build] WARNING: GOOGLE_CLIENT_SECRET is set in .env.\n" +
+            "  Chrome Extension OAuth clients have NO secret.\n" +
+            "  A secret usually means you created a Web client — that causes Google\n" +
+            '  “Access blocked” with chrome.identity.getAuthToken.\n' +
+            "  Create Application type = Chrome Extension, Item ID =\n" +
+            "  najlilhbfkkocnnhfaofffpfehcipahe, put ONLY that Client ID in .env.\n" +
+            "  See AUTH.md"
+        );
+      }
+
       const manifestPath = path.resolve(__dirname, "dist/manifest.json");
       const backgroundPath = path.resolve(__dirname, "dist/background.js");
 
