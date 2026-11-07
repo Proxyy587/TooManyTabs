@@ -15,6 +15,30 @@ export interface TabGroup {
   dirty?: boolean;
 }
 
+/** Stable id for the default Later inbox */
+export const LATER_SHELF_ID = "00000000-0000-4000-8000-000000000001";
+export const LATER_SHELF_NAME = "Later";
+
+export type ThemeMode = "light" | "dark";
+export type ThemeAccent = "coral" | "mint" | "sky" | "amber";
+export type ViewMode = "list" | "grid";
+
+export interface AppPrefs {
+  themeMode: ThemeMode;
+  themeAccent: ThemeAccent;
+  viewMode: ViewMode;
+  closeOnPark: boolean;
+  onboardingDismissed: boolean;
+}
+
+export const DEFAULT_PREFS: AppPrefs = {
+  themeMode: "light",
+  themeAccent: "coral",
+  viewMode: "list",
+  closeOnPark: false,
+  onboardingDismissed: false,
+};
+
 export interface AuthUser {
   id: number;
   email: string;
@@ -97,10 +121,161 @@ async function readGroups(): Promise<TabGroup[]> {
   return (tabGroups || []).filter((g) => !g.deleted);
 }
 
+/** Ensure the Later inbox shelf exists (pinned, stable id). */
+export async function ensureLaterShelf(): Promise<TabGroup[]> {
+  const groups = await readGroups();
+  const existing =
+    groups.find((g) => g.id === LATER_SHELF_ID) ||
+    groups.find((g) => g.name === LATER_SHELF_NAME && !g.deleted);
+  if (existing) {
+    if (existing.id !== LATER_SHELF_ID || !existing.pinned) {
+      const updated = groups.map((g) =>
+        g.id === existing.id
+          ? {
+              ...g,
+              id: LATER_SHELF_ID,
+              name: LATER_SHELF_NAME,
+              pinned: true,
+              dirty: true,
+              updatedAt: new Date().toISOString(),
+            }
+          : g
+      );
+      await writeGroups(updated);
+      return updated.filter((g) => !g.deleted);
+    }
+    return groups;
+  }
+  const later: TabGroup = {
+    id: LATER_SHELF_ID,
+    name: LATER_SHELF_NAME,
+    pinned: true,
+    tabs: [],
+    updatedAt: new Date().toISOString(),
+    deleted: false,
+    dirty: true,
+  };
+  const next = [later, ...groups];
+  await writeGroups(next);
+  return next;
+}
+
+export async function getPrefs(): Promise<AppPrefs> {
+  const raw = await storageGet<Partial<AppPrefs> & Record<string, unknown>>([
+    "themeMode",
+    "themeAccent",
+    "viewMode",
+    "closeOnPark",
+    "onboardingDismissed",
+  ]);
+  return {
+    themeMode: raw.themeMode === "dark" ? "dark" : "light",
+    themeAccent: (["coral", "mint", "sky", "amber"] as ThemeAccent[]).includes(
+      raw.themeAccent as ThemeAccent
+    )
+      ? (raw.themeAccent as ThemeAccent)
+      : "coral",
+    viewMode: raw.viewMode === "grid" ? "grid" : "list",
+    closeOnPark: raw.closeOnPark === true,
+    onboardingDismissed: raw.onboardingDismissed === true,
+  };
+}
+
+export async function setPrefs(patch: Partial<AppPrefs>): Promise<AppPrefs> {
+  const current = await getPrefs();
+  const next = { ...current, ...patch };
+  await storageSet({
+    themeMode: next.themeMode,
+    themeAccent: next.themeAccent,
+    viewMode: next.viewMode,
+    closeOnPark: next.closeOnPark,
+    onboardingDismissed: next.onboardingDismissed,
+  });
+  return next;
+}
+
+export async function exportGroupsJson(): Promise<string> {
+  const groups = await readGroups();
+  return JSON.stringify(
+    { version: 1, exportedAt: new Date().toISOString(), tabGroups: groups },
+    null,
+    2
+  );
+}
+
+export async function importGroupsJson(json: string): Promise<TabGroup[]> {
+  const parsed = JSON.parse(json) as {
+    tabGroups?: TabGroup[];
+  };
+  if (!Array.isArray(parsed.tabGroups)) {
+    throw new Error("Invalid backup file");
+  }
+  const incoming = parsed.tabGroups.map((g) => ({
+    ...g,
+    id: g.id || crypto.randomUUID(),
+    name: g.name || "Imported",
+    pinned: !!g.pinned,
+    tabs: Array.isArray(g.tabs) ? g.tabs : [],
+    updatedAt: new Date().toISOString(),
+    deleted: false,
+    dirty: true,
+  }));
+  const existing = await readGroups();
+  const byId = new Map(existing.map((g) => [g.id, g]));
+  for (const g of incoming) byId.set(g.id, g);
+  const merged = [...byId.values()];
+  await writeGroups(merged);
+  await ensureLaterShelf();
+  return readGroups();
+}
+
+export async function getSyncMeta(): Promise<{
+  lastSyncedAt: string | null;
+  lastSyncError: string | null;
+}> {
+  const { lastSyncedAt, lastSyncError } = await storageGet<{
+    lastSyncedAt?: string | null;
+    lastSyncError?: string | null;
+  }>(["lastSyncedAt", "lastSyncError"]);
+  return {
+    lastSyncedAt: lastSyncedAt || null,
+    lastSyncError: lastSyncError || null,
+  };
+}
+
 async function writeGroups(groups: TabGroup[]): Promise<void> {
   await storageSet({ tabGroups: groups });
   // Best-effort sync if logged in — never blocks guest mode
   sendMessage({ action: "pushDirty" }).catch(() => {});
+}
+
+function getGoogleAccessTokenFromPage(interactive = true): Promise<string> {
+  return new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive }, (result) => {
+      if (chrome.runtime.lastError || !result) {
+        const raw = chrome.runtime.lastError?.message || "Google sign-in failed";
+        if (/did not approve/i.test(raw)) {
+          reject(
+            new Error(
+              "Google access was not approved. In the Google popup click Allow — " +
+                "don’t close it. If your app is in Testing mode, add your Gmail as a test user " +
+                "in Google Cloud → OAuth consent screen. Also confirm extension ID matches the " +
+                "Chrome Extension client Item ID."
+            )
+          );
+          return;
+        }
+        reject(new Error(raw));
+        return;
+      }
+      const token = typeof result === "string" ? result : result.token;
+      if (!token) {
+        reject(new Error("Google did not return an access token"));
+        return;
+      }
+      resolve(token);
+    });
+  });
 }
 
 export async function googleLogin(): Promise<{
@@ -109,6 +284,20 @@ export async function googleLogin(): Promise<{
   deviceId: string;
   user: AuthUser;
 }> {
+  // Official Chrome pattern: getAuthToken in the extension page, then hand token to backend
+  let accessToken: string;
+  try {
+    accessToken = await getGoogleAccessTokenFromPage(true);
+  } catch (firstErr) {
+    // One retry after clearing a stale/denied cache
+    await sendMessage({ action: "clearGoogleAuthCache" }).catch(() => {});
+    try {
+      accessToken = await getGoogleAccessTokenFromPage(true);
+    } catch {
+      throw firstErr instanceof Error ? firstErr : new Error("Google sign-in failed");
+    }
+  }
+
   const response = await sendMessage<{
     success: boolean;
     data?: {
@@ -118,7 +307,7 @@ export async function googleLogin(): Promise<{
       user: AuthUser;
     };
     error?: string;
-  }>({ action: "googleLogin" });
+  }>({ action: "googleLogin", accessToken });
 
   if (!response?.success || !response.data) {
     throw new Error(response?.error || "Login failed");
