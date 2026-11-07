@@ -31,7 +31,7 @@ app.get("/health", (_req: Request, res: Response) => {
     database: process.env.DATABASE_URL ? "configured" : "not configured",
     jwt: process.env.JWT_SECRET ? "configured" : "not configured",
     google: process.env.GOOGLE_CLIENT_ID ? "configured" : "not configured",
-    googleSecret: process.env.GOOGLE_CLIENT_SECRET ? "configured" : "missing",
+    authMode: "chrome.identity.getAuthToken → POST /auth/google { accessToken }",
   });
 });
 
@@ -48,9 +48,9 @@ const server = http.createServer(app);
 
 server.on("error", (err: NodeJS.ErrnoException) => {
   if (err.code === "EADDRINUSE") {
-    console.error(
-      `[server] Port ${PORT} is already in use. Kill the other process or set PORT=3001`
-    );
+    console.error(`[server] Port ${PORT} is already in use.`);
+    console.error(`[server] Free it with:  lsof -tiTCP:${PORT} -sTCP:LISTEN | xargs kill`);
+    console.error(`[server] Or use another port:  PORT=3001 bun run dev`);
   } else {
     console.error("[server] Failed to start:", err);
   }
@@ -60,23 +60,21 @@ server.on("error", (err: NodeJS.ErrnoException) => {
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`[server] TooManyTabs listening on http://127.0.0.1:${PORT}`);
   console.log(`[server] Health: http://127.0.0.1:${PORT}/health`);
+  console.log(`[server] Auth: chrome.identity.getAuthToken → POST /auth/google`);
+  console.log(`[server] Press Ctrl+C to stop`);
   if (!process.env.DATABASE_URL) console.warn("[server] DATABASE_URL is not set");
   if (!process.env.JWT_SECRET) console.warn("[server] JWT_SECRET is not set");
-  if (!process.env.GOOGLE_CLIENT_ID) console.warn("[server] GOOGLE_CLIENT_ID is not set");
-  if (!process.env.GOOGLE_CLIENT_SECRET) {
-    console.warn(
-      "[server] GOOGLE_CLIENT_SECRET is not set — WebAuthFlow login needs it. Chrome getAuthToken still works."
-    );
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    console.warn("[server] GOOGLE_CLIENT_ID is not set (optional for access-token auth)");
   }
 });
 
-// Keep the Bun process alive (prevents silent exit after listen in some environments)
-const keepAlive = setInterval(() => {}, 1 << 30);
-process.on("SIGINT", () => {
-  clearInterval(keepAlive);
+function shutdown(signal: string) {
+  console.log(`\n[server] ${signal} received — shutting down…`);
   server.close(() => process.exit(0));
-});
-process.on("SIGTERM", () => {
-  clearInterval(keepAlive);
-  server.close(() => process.exit(0));
-});
+  // Force-exit if connections hang (keeps Ctrl+C snappy)
+  setTimeout(() => process.exit(0), 1500).unref();
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
