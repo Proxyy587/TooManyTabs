@@ -1,6 +1,18 @@
 # TooManyTabs
 
-Save, organize, and sync browser tabs across Chrome, Edge, and Brave.
+**Your go-to tab shelf** — park tabs, find them fast, restore when ready. Local-first; sync optional.
+
+## Docs
+
+| Doc | What |
+|-----|------|
+| [docs/PRODUCT.md](./docs/PRODUCT.md) | Thesis, features, non-goals |
+| [docs/DESIGN.md](./docs/DESIGN.md) | Pixel/vexel design system |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Extension + API + data |
+| [docs/CHANGELOG.md](./docs/CHANGELOG.md) | Version history |
+| [docs/AGENT_PROMPT.md](./docs/AGENT_PROMPT.md) | Implementation agent prompt |
+| [AUTH.md](./AUTH.md) | Chrome Extension Google OAuth |
+| [server/SETUP.md](./server/SETUP.md) | Backend setup |
 
 ## Quick start
 
@@ -9,63 +21,49 @@ Save, organize, and sync browser tabs across Chrome, Edge, and Brave.
 ```bash
 cd server
 bun install
-cp .env.example .env   # fill DATABASE_URL, JWT_SECRET, GOOGLE_CLIENT_ID
+cp .env.example .env   # DATABASE_URL, JWT_SECRET, GOOGLE_CLIENT_ID
 bun run db:push
 bun run dev            # http://localhost:3000
 ```
 
-Full OAuth + Neon setup: [server/SETUP.md](./server/SETUP.md)
-
 ### 2. Extension
 
 ```bash
-# from repo root
+# repo root — put GOOGLE_CLIENT_ID + API_BASE_URL in .env
 bun install
 bun run build
 ```
 
-Load unpacked in `chrome://extensions` → select the `dist/` folder.
+Load unpacked → `chrome://extensions` → select **`dist/`**.
 
 ### 3. Google OAuth
 
-Use a **Web application** OAuth client. Add this redirect URI (after loading the extension once to get its ID):
+Use a **Chrome Extension** OAuth client (not Web). See [AUTH.md](./AUTH.md).  
+`bun run build` injects `GOOGLE_CLIENT_ID` from root `.env` into `dist/manifest.json`.
 
-```
-https://<EXTENSION_ID>.chromiumapp.org/
-```
+## Features (0.3)
 
-Put the same Client ID in `server/.env`, `public/manifest.json`, and `public/background.js`.
-
-## Features (v1)
-
-- Named tab groups (save / restore / rename / pin / delete)
-- Local storage always works offline
-- Cloud sync when signed in (push on change + pull every 5 min)
-- Cross-browser Google login via `launchWebAuthFlow`
-- Search across saved groups
-- Duplicate open-tab detection
+- **Later** inbox + named shelves
+- Park open tabs (partial select; close tabs opt-in)
+- Search, list/grid, restore one or all
+- Move tabs between shelves
+- Local-first; optional cloud sync
+- Settings, export/import, sync status
+- Pixel/vexel blue identity
 
 ## Project structure
 
 ```
 TooManyTabs/
-├── public/                 # Copied into dist/ by Vite
-│   ├── manifest.json
-│   ├── background.js       # Auth + local groups + sync
-│   └── icon*.svg/png
-├── src/                    # React UI
+├── docs/                 # Product + design + agent prompt
+├── public/               # manifest, background.js → dist/
+├── src/
 │   ├── App.tsx
-│   └── lib/api.ts          # chrome.runtime message bridge
-├── server/                 # Express + Drizzle + Neon
-│   ├── routes/auth|sync|device
-│   └── db/schema.ts
-└── dist/                   # Load this as unpacked extension
+│   ├── features/shelf/
+│   ├── features/settings/
+│   ├── components/brand/
+│   └── lib/api.ts
+└── server/               # Express + Drizzle + Neon
 ```
 
-## Scripts
-
-| Command | What it does |
-|---------|----------------|
-| `bun run build` | Build extension into `dist/` |
-| `bun run server` | Start API on :3000 |
-| `bun run db:push` | Push Drizzle schema to Neon |
+by Abhijit
