@@ -4,36 +4,40 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ToastProvider, useToast } from "@/components/shared/Toast"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { Input } from "@/components/ui/input"
+import { CubeMark } from "@/components/brand/CubeMark"
+import { Credits } from "@/components/brand/Credits"
+import { ParkModal } from "@/features/shelf/ParkModal"
+import { Onboarding } from "@/features/shelf/Onboarding"
+import { SyncChip, type SyncState } from "@/features/shelf/SyncChip"
+import { SettingsPage } from "@/features/settings/SettingsPage"
 import {
   LayoutGrid,
   List,
   Search,
-  Plus,
-  RotateCcw,
-  Trash2,
-  Pin,
+  Settings,
   LogOut,
   RefreshCw,
   ExternalLink,
   Copy,
-  X,
-  Sparkles,
+  Trash2,
+  Pin,
+  RotateCcw,
+  FolderInput,
   Merge,
-  Moon,
-  Sun,
-  Palette,
+  Sparkles,
 } from "lucide-react"
 import {
   googleLogin,
   logout,
   getAuthState,
-  getGroups,
+  ensureLaterShelf,
   saveTabsAsGroup,
   appendTabsToGroup,
   renameGroup,
   togglePin,
   deleteGroup,
   deleteTabFromGroup,
+  moveTabToGroup,
   restoreTabs,
   restoreSingleTab,
   closeTabs,
@@ -41,115 +45,82 @@ import {
   mergeGroups,
   findDuplicateOpenTabs,
   suggestDomainGroups,
+  getPrefs,
+  setPrefs,
+  exportGroupsJson,
+  importGroupsJson,
+  getSyncMeta,
+  LATER_SHELF_ID,
+  LATER_SHELF_NAME,
   type TabGroup,
   type TabData,
   type AuthUser,
+  type AppPrefs,
+  type ViewMode,
 } from "@/lib/api"
 
-type ViewMode = "list" | "grid"
-type ShelfFilter = "all" | string
-type ThemeMode = "light" | "dark"
-type ThemeAccent = "coral" | "mint" | "sky" | "amber"
+type AppView = "shelf" | "settings"
+type ShelfFilter = "all" | "later" | string
 
-interface OpenTab {
+type OpenTab = {
   id: string
   url: string
   title: string
   favIconUrl?: string
 }
 
-const ACCENTS: { id: ThemeAccent; label: string; swatch: string }[] = [
-  { id: "coral", label: "Coral", swatch: "#ff4d3a" },
-  { id: "mint", label: "Mint", swatch: "#0d9488" },
-  { id: "sky", label: "Sky", swatch: "#0284c7" },
-  { id: "amber", label: "Amber", swatch: "#d97706" },
-]
-
-declare const chrome: typeof globalThis.chrome
-
-function Fav({ url, title }: { url?: string | null; title?: string }) {
-  if (url) {
-    return (
-      <img
-        src={url}
-        alt=""
-        className="h-4 w-4 rounded object-contain"
-        onError={(e) => {
-          ;(e.target as HTMLImageElement).style.display = "none"
-        }}
-      />
-    )
-  }
-  return (
-    <span
-      className="flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold"
-      style={{ background: "var(--pop-soft)", color: "var(--pop)" }}
-    >
-      {(title || "?").slice(0, 1).toUpperCase()}
-    </span>
-  )
-}
-
 function AppInner() {
   const { toast } = useToast()
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const [openTabs, setOpenTabs] = useState<OpenTab[]>([])
+  const [view, setView] = useState<AppView>("shelf")
+  const [prefs, setPrefsState] = useState<AppPrefs | null>(null)
   const [groups, setGroups] = useState<TabGroup[]>([])
-  const [filter, setFilter] = useState<ShelfFilter>("all")
-  const [view, setView] = useState<ViewMode>("list")
+  const [openTabs, setOpenTabs] = useState<OpenTab[]>([])
   const [query, setQuery] = useState("")
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [isLoading, setIsLoading] = useState(false)
-  const [isSyncing, setIsSyncing] = useState(false)
-  const [isAuthLoading, setIsAuthLoading] = useState(true)
+  const [filter, setFilter] = useState<ShelfFilter>("later")
+  const [showPark, setShowPark] = useState(false)
+  const [isParking, setIsParking] = useState(false)
+  const [isAuthLoading, setIsAuthLoading] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [showSave, setShowSave] = useState(false)
-  const [saveName, setSaveName] = useState("")
-  const [saveTarget, setSaveTarget] = useState("new")
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncState, setSyncState] = useState<SyncState>("offline")
+  const [syncHint, setSyncHint] = useState<string | undefined>()
   const [editingFolder, setEditingFolder] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
-  const [showTheme, setShowTheme] = useState(false)
-  const [mode, setMode] = useState<ThemeMode>("light")
-  const [accent, setAccent] = useState<ThemeAccent>("coral")
-  const [confirm, setConfirm] = useState<{
-    title: string
-    description: string
-    confirmLabel: string
-    onConfirm: () => void
-  } | null>(null)
+  const [mergeSelect, setMergeSelect] = useState<Set<string>>(new Set())
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [moveMenu, setMoveMenu] = useState<{ groupId: string; index: number } | null>(null)
 
-  const applyTheme = useCallback((m: ThemeMode, a: ThemeAccent) => {
-    document.documentElement.setAttribute("data-mode", m)
-    document.documentElement.setAttribute("data-accent", a)
-    document.documentElement.classList.toggle("dark", m === "dark")
-  }, [])
-
-  useEffect(() => {
-    applyTheme(mode, accent)
-  }, [mode, accent, applyTheme])
-
-  useEffect(() => {
-    chrome.storage.local.get(["themeMode", "themeAccent", "viewMode"]).then((r) => {
-      if (r.themeMode === "light" || r.themeMode === "dark") setMode(r.themeMode)
-      if (["coral", "mint", "sky", "amber"].includes(r.themeAccent)) setAccent(r.themeAccent)
-      if (r.viewMode === "grid" || r.viewMode === "list") setView(r.viewMode)
-    })
-  }, [])
-
-  const persistTheme = (m: ThemeMode, a: ThemeAccent) => {
-    setMode(m)
-    setAccent(a)
-    chrome.storage.local.set({ themeMode: m, themeAccent: a })
+  const applyTheme = (p: AppPrefs) => {
+    document.documentElement.dataset.mode = p.themeMode
+    document.documentElement.dataset.accent = p.themeAccent
+    document.documentElement.classList.toggle("dark", p.themeMode === "dark")
   }
 
-  const loadGroups = useCallback(async () => {
-    try {
-      setGroups(await getGroups())
-    } catch (e) {
-      console.error(e)
+  const refreshSyncChip = useCallback(async (loggedIn: boolean) => {
+    if (!loggedIn) {
+      setSyncState("offline")
+      setSyncHint("Guest — this device only")
+      return
     }
+    const meta = await getSyncMeta()
+    if (meta.lastSyncError) {
+      setSyncState("error")
+      setSyncHint(meta.lastSyncError)
+    } else if (meta.lastSyncedAt) {
+      setSyncState("synced")
+      setSyncHint(`Last synced ${new Date(meta.lastSyncedAt).toLocaleString()}`)
+    } else {
+      setSyncState("synced")
+      setSyncHint("Signed in")
+    }
+  }, [])
+
+  const loadGroups = useCallback(async () => {
+    const g = await ensureLaterShelf()
+    setGroups(g)
   }, [])
 
   const loadOpenTabs = useCallback(async () => {
@@ -159,6 +130,7 @@ function AppInner() {
         tabs
           .filter(
             (t) =>
+              t.id != null &&
               t.url &&
               !t.url.startsWith("chrome://") &&
               !t.url.startsWith("chrome-extension://") &&
@@ -167,13 +139,13 @@ function AppInner() {
           )
           .map((t) => ({
             id: String(t.id),
-            url: t.url || "",
-            title: t.title || "Untitled",
+            url: t.url!,
+            title: t.title || t.url || "Untitled",
             favIconUrl: t.favIconUrl,
           }))
       )
-    } catch (e) {
-      console.error(e)
+    } catch {
+      setOpenTabs([])
     }
   }, [])
 
@@ -183,12 +155,18 @@ function AppInner() {
       const state = await getAuthState()
       setIsAuthenticated(state.loggedIn)
       setUser(state.user)
+      await refreshSyncChip(state.loggedIn)
     } finally {
       setIsAuthLoading(false)
     }
-  }, [])
+  }, [refreshSyncChip])
 
   useEffect(() => {
+    ;(async () => {
+      const p = await getPrefs()
+      setPrefsState(p)
+      applyTheme(p)
+    })()
     initAuth()
     loadGroups()
     loadOpenTabs()
@@ -196,14 +174,23 @@ function AppInner() {
       changes: { [key: string]: chrome.storage.StorageChange },
       area: string
     ) => {
-      if (area === "local" && changes.tabGroups) {
-        setGroups(((changes.tabGroups.newValue || []) as TabGroup[]).filter((g) => !g.deleted))
+      if (area !== "local") return
+      if (changes.tabGroups) {
+        setGroups(
+          ((changes.tabGroups.newValue || []) as TabGroup[]).filter((g) => !g.deleted)
+        )
       }
-      if (area === "local" && (changes.authToken || changes.user)) initAuth()
+      if (changes.authToken || changes.user) {
+        initAuth()
+        if (changes.authToken?.newValue) setTimeout(loadGroups, 500)
+      }
+      if (changes.lastSyncedAt || changes.lastSyncError) {
+        getAuthState().then((s) => refreshSyncChip(s.loggedIn))
+      }
     }
     chrome.storage.onChanged.addListener(onStorage)
     return () => chrome.storage.onChanged.removeListener(onStorage)
-  }, [initAuth, loadGroups, loadOpenTabs])
+  }, [initAuth, loadGroups, loadOpenTabs, refreshSyncChip])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -213,76 +200,59 @@ function AppInner() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s" && openTabs.length) {
         e.preventDefault()
-        setSaveName("")
-        setSaveTarget("new")
-        setShowSave(true)
+        setShowPark(true)
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [openTabs.length])
 
-  const setViewMode = (v: ViewMode) => {
-    setView(v)
-    chrome.storage.local.set({ viewMode: v })
+  const updatePrefs = async (patch: Partial<AppPrefs>) => {
+    const next = await setPrefs(patch)
+    setPrefsState(next)
+    applyTheme(next)
   }
 
-  const sortedGroups = useMemo(
-    () =>
-      [...groups].sort((a, b) => {
-        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-      }),
-    [groups]
-  )
+  const viewMode: ViewMode = prefs?.viewMode ?? "list"
+  const closeOnPark = prefs?.closeOnPark ?? false
 
-  const allShelfTabs = useMemo(() => {
-    const items: Array<{
-      key: string
-      groupId: string
-      groupName: string
-      tabIndex: number
-      tab: TabData
-    }> = []
-    for (const g of sortedGroups) {
-      g.tabs.forEach((tab, tabIndex) => {
-        items.push({ key: `${g.id}-${tabIndex}`, groupId: g.id, groupName: g.name, tabIndex, tab })
-      })
-    }
-    return items
-  }, [sortedGroups])
+  const sortedShelves = useMemo(() => {
+    const later = groups.find((g) => g.id === LATER_SHELF_ID)
+    const rest = [...groups]
+      .filter((g) => g.id !== LATER_SHELF_ID)
+      .sort(
+        (a, b) => Number(b.pinned) - Number(a.pinned) || a.name.localeCompare(b.name)
+      )
+    return { later, rest }
+  }, [groups])
 
   const visibleTabs = useMemo(() => {
-    let items = allShelfTabs
-    if (filter !== "all") items = items.filter((i) => i.groupId === filter)
-    if (query.trim()) {
-      const q = query.toLowerCase()
-      items = items.filter(
-        (i) =>
-          i.tab.title.toLowerCase().includes(q) ||
-          i.tab.url.toLowerCase().includes(q) ||
-          i.groupName.toLowerCase().includes(q)
-      )
+    const q = query.trim().toLowerCase()
+    let list: Array<TabData & { groupId: string; groupName: string; index: number }> = []
+    const source =
+      filter === "all"
+        ? groups
+        : filter === "later"
+          ? groups.filter((g) => g.id === LATER_SHELF_ID)
+          : groups.filter((g) => g.id === filter)
+
+    for (const g of source) {
+      g.tabs.forEach((t, index) => {
+        if (
+          !q ||
+          t.title.toLowerCase().includes(q) ||
+          t.url.toLowerCase().includes(q) ||
+          g.name.toLowerCase().includes(q)
+        ) {
+          list.push({ ...t, groupId: g.id, groupName: g.name, index })
+        }
+      })
     }
-    return items
-  }, [allShelfTabs, filter, query])
+    return list
+  }, [groups, filter, query])
 
-  const duplicates = useMemo(() => findDuplicateOpenTabs(openTabs), [openTabs])
-  const duplicateCount = useMemo(() => {
-    let n = 0
-    for (const ids of duplicates.values()) n += ids.length - 1
-    return n
-  }, [duplicates])
-
-  const domainSuggestions = useMemo(
-    () =>
-      suggestDomainGroups(
-        openTabs.map((t) => ({ url: t.url, title: t.title, favIconUrl: t.favIconUrl }))
-      ).filter((d) => d.tabs.length >= 2),
-    [openTabs]
-  )
-
-  const activeFolder = filter === "all" ? null : groups.find((g) => g.id === filter)
+  const dupes = useMemo(() => findDuplicateOpenTabs(openTabs), [openTabs])
+  const dupeCount = [...dupes.values()].reduce((n, ids) => n + (ids.length - 1), 0)
 
   const handleLogin = async () => {
     try {
@@ -291,9 +261,10 @@ function AppInner() {
       setIsAuthenticated(true)
       setUser(data.user)
       toast("Signed in", "success")
+      await refreshSyncChip(true)
       setTimeout(loadGroups, 800)
     } catch (e) {
-      toast(e instanceof Error ? e.message.slice(0, 140) : "Sign-in failed", "error")
+      toast(e instanceof Error ? e.message.slice(0, 160) : "Sign-in failed", "error")
     } finally {
       setIsAuthLoading(false)
     }
@@ -303,6 +274,7 @@ function AppInner() {
     await logout()
     setIsAuthenticated(false)
     setUser(null)
+    await refreshSyncChip(false)
     toast("Signed out", "info")
   }
 
@@ -312,611 +284,636 @@ function AppInner() {
       return
     }
     setIsSyncing(true)
+    setSyncState("syncing")
     try {
       setGroups(await manualSync())
+      await chrome.storage.local.set({
+        lastSyncedAt: new Date().toISOString(),
+        lastSyncError: null,
+      })
       toast("Synced", "success")
+      await refreshSyncChip(true)
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Sync failed", "error")
+      const msg = e instanceof Error ? e.message : "Sync failed"
+      await chrome.storage.local.set({ lastSyncError: msg })
+      setSyncState("error")
+      setSyncHint(msg)
+      toast(msg, "error")
     } finally {
       setIsSyncing(false)
     }
   }
 
-  const handleSave = async () => {
-    if (!openTabs.length) return
-    setIsLoading(true)
+  const handlePark = async ({
+    tabIds,
+    dest,
+    newName,
+  }: {
+    tabIds: string[]
+    dest: string
+    newName: string
+  }) => {
+    const selected = openTabs.filter((t) => tabIds.includes(t.id))
+    if (!selected.length) return
+    setIsParking(true)
     try {
-      const payload = openTabs.map((t, i) => ({
+      await ensureLaterShelf()
+      const payload: TabData[] = selected.map((t, i) => ({
         url: t.url,
         title: t.title,
         favIconUrl: t.favIconUrl,
         position: i,
       }))
-      if (saveTarget !== "new") {
-        await appendTabsToGroup(saveTarget, payload)
-        toast("Added to folder", "success")
+      if (dest === "later") {
+        await appendTabsToGroup(LATER_SHELF_ID, payload)
+        toast("Parked to Later", "success")
+        setFilter("later")
+      } else if (dest === "new") {
+        await saveTabsAsGroup(payload, newName || `Shelf ${new Date().toLocaleString()}`)
+        toast(`Saved “${newName || "Shelf"}”`, "success")
+        setFilter("all")
       } else {
-        const name =
-          saveName.trim() ||
-          `Shelf ${new Date().toLocaleString(undefined, {
-            month: "short",
-            day: "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-          })}`
-        await saveTabsAsGroup(payload, name)
-        toast(`Saved “${name}”`, "success")
+        await appendTabsToGroup(dest, payload)
+        toast("Added to shelf", "success")
+        setFilter(dest)
       }
-      setShowSave(false)
+      setShowPark(false)
       await loadGroups()
-      const ids = openTabs.map((t) => Number.parseInt(t.id, 10)).filter((n) => !isNaN(n))
-      if (ids.length > 1) await closeTabs(ids.slice(0, -1))
-      setTimeout(loadOpenTabs, 250)
+      if (closeOnPark) {
+        const ids = selected.map((t) => Number.parseInt(t.id, 10)).filter((n) => !Number.isNaN(n))
+        if (ids.length > 1) await closeTabs(ids.slice(0, -1))
+        else if (ids.length === 1 && openTabs.length > 1) await closeTabs(ids)
+        setTimeout(loadOpenTabs, 250)
+      }
     } catch {
-      toast("Couldn't save", "error")
+      toast("Couldn't park tabs", "error")
     } finally {
-      setIsLoading(false)
+      setIsParking(false)
     }
   }
 
-  const handleSmartGroup = async () => {
-    if (!domainSuggestions.length) return
-    setIsLoading(true)
+  const handleSortBySite = async () => {
+    if (!openTabs.length) return
+    const suggestions = suggestDomainGroups(
+      openTabs.map((t) => ({ url: t.url, title: t.title, favIconUrl: t.favIconUrl }))
+    ).filter((d) => d.tabs.length >= 2)
+    if (!suggestions.length) {
+      toast("Need 2+ tabs from the same site", "info")
+      return
+    }
     try {
-      for (const s of domainSuggestions) await saveTabsAsGroup(s.tabs, s.domain)
+      for (const s of suggestions) {
+        await saveTabsAsGroup(
+          s.tabs.map((t, i) => ({
+            url: t.url,
+            title: t.title || "Untitled",
+            favIconUrl: t.favIconUrl,
+            position: i,
+          })),
+          s.domain
+        )
+      }
+      toast(`Sorted into ${suggestions.length} shelves`, "success")
       await loadGroups()
-      toast(`Grouped into ${domainSuggestions.length} folders`, "success")
-      const ids = openTabs.map((t) => Number.parseInt(t.id, 10)).filter((n) => !isNaN(n))
-      if (ids.length > 1) await closeTabs(ids.slice(0, -1))
-      setTimeout(loadOpenTabs, 250)
     } catch {
-      toast("Couldn't auto-group", "error")
-    } finally {
-      setIsLoading(false)
+      toast("Couldn't sort by site", "error")
     }
-  }
-
-  const handleMergeSelected = async () => {
-    if (selected.size < 2) return
-    const name = window.prompt("Merged folder name:", "Combined")
-    if (!name?.trim()) return
-    setGroups(await mergeGroups([...selected], name.trim()))
-    setSelected(new Set())
-    setFilter("all")
-    toast("Merged", "success")
   }
 
   const handleCloseDuplicates = async () => {
     const toClose: number[] = []
-    for (const ids of duplicates.values()) {
-      for (let i = 1; i < ids.length; i++) {
-        const n = Number.parseInt(ids[i], 10)
-        if (!isNaN(n)) toClose.push(n)
+    for (const ids of dupes.values()) {
+      for (const id of ids.slice(1)) {
+        const n = Number.parseInt(id, 10)
+        if (!Number.isNaN(n)) toClose.push(n)
       }
     }
     if (!toClose.length) return
     await closeTabs(toClose)
-    toast(`Closed ${toClose.length}`, "success")
+    toast(`Closed ${toClose.length} duplicates`, "success")
     setTimeout(loadOpenTabs, 200)
   }
 
   const commitRename = async (id: string) => {
     const name = editName.trim()
     setEditingFolder(null)
-    if (!name) return
+    if (!name || id === LATER_SHELF_ID) return
     await renameGroup(id, name)
     await loadGroups()
   }
 
+  const handleMerge = async () => {
+    const ids = [...mergeSelect]
+    if (ids.length < 2) return
+    const name = window.prompt("Name for merged shelf")
+    if (!name?.trim()) return
+    await mergeGroups(ids, name.trim())
+    setMergeSelect(new Set())
+    toast("Merged", "success")
+    await loadGroups()
+  }
+
+  const handleExport = async () => {
+    const json = await exportGroupsJson()
+    const blob = new Blob([json], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `toomanytabs-backup-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast("Exported", "success")
+  }
+
+  const handleImport = async (file: File) => {
+    try {
+      const text = await file.text()
+      setGroups(await importGroupsJson(text))
+      toast("Imported", "success")
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Import failed", "error")
+    }
+  }
+
+  if (!prefs) {
+    return (
+      <div className="app-shell grid place-items-center text-sm" style={{ color: "var(--ink-3)" }}>
+        Loading shelf…
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell">
-      {/* —— Compact chrome (~20%) —— */}
       <header className="app-chrome space-y-2.5">
         <div className="flex items-center gap-2">
-          <h1 className="font-display shrink-0 text-base font-extrabold tracking-tight sm:text-lg">
-            TooMany<span style={{ color: "var(--pop)" }}>Tabs</span>
-          </h1>
-
-          <div className="relative min-w-0 flex-1">
-            <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
-              style={{ color: "var(--ink-3)" }}
-            />
-            <Input
-              ref={searchRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search tabs…"
-              className="h-8 rounded-full border pl-8 pr-3 text-xs shadow-none"
-              style={{
-                background: "var(--paper-2)",
-                borderColor: "var(--line)",
-                color: "var(--ink)",
-              }}
-            />
-          </div>
-
-          <div className="flex shrink-0 items-center gap-0.5">
-            <button
-              type="button"
-              className="icon-btn"
-              style={{
-                background: view === "list" ? "var(--pop-soft)" : undefined,
-                color: view === "list" ? "var(--pop)" : undefined,
-              }}
-              onClick={() => setViewMode("list")}
-              aria-label="List"
-            >
-              <List className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              style={{
-                background: view === "grid" ? "var(--pop-soft)" : undefined,
-                color: view === "grid" ? "var(--pop)" : undefined,
-              }}
-              onClick={() => setViewMode("grid")}
-              aria-label="Grid"
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-            </button>
-
-            <div className="relative">
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => setShowTheme((v) => !v)}
-                aria-label="Theme"
-                title="Theme"
-              >
-                <Palette className="h-3.5 w-3.5" />
-              </button>
-              {showTheme && (
-                <div
-                  className="absolute right-0 top-9 z-40 w-48 rounded-2xl border p-3 shadow-lg"
-                  style={{
-                    background: "var(--paper-2)",
-                    borderColor: "var(--line-2)",
-                    boxShadow: "0 12px 40px rgba(0,0,0,0.12)",
-                  }}
-                >
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--ink-3)" }}>
-                    Mode
-                  </p>
-                  <div className="mb-3 flex gap-1">
-                    <button
-                      type="button"
-                      className="btn-ghost flex-1 !h-7 !text-[11px]"
-                      style={{
-                        background: mode === "light" ? "var(--pop-soft)" : undefined,
-                        borderColor: mode === "light" ? "var(--pop)" : undefined,
-                        color: mode === "light" ? "var(--pop)" : undefined,
-                      }}
-                      onClick={() => persistTheme("light", accent)}
-                    >
-                      <Sun className="h-3 w-3" /> Light
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-ghost flex-1 !h-7 !text-[11px]"
-                      style={{
-                        background: mode === "dark" ? "var(--pop-soft)" : undefined,
-                        borderColor: mode === "dark" ? "var(--pop)" : undefined,
-                        color: mode === "dark" ? "var(--pop)" : undefined,
-                      }}
-                      onClick={() => persistTheme("dark", accent)}
-                    >
-                      <Moon className="h-3 w-3" /> Dark
-                    </button>
-                  </div>
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--ink-3)" }}>
-                    Accent
-                  </p>
-                  <div className="flex gap-2">
-                    {ACCENTS.map((a) => (
-                      <button
-                        key={a.id}
-                        type="button"
-                        className="theme-dot"
-                        data-active={accent === a.id}
-                        style={{ background: a.swatch }}
-                        title={a.label}
-                        aria-label={a.label}
-                        onClick={() => persistTheme(mode, a.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {!isAuthLoading &&
-              (isAuthenticated ? (
-                <>
-                  <button type="button" className="icon-btn" onClick={handleSync} title="Sync" disabled={isSyncing}>
-                    <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-                  </button>
-                  <button type="button" className="icon-btn" onClick={handleLogout} title={user?.email || "Sign out"}>
-                    <LogOut className="h-3.5 w-3.5" />
-                  </button>
-                </>
-              ) : (
-                <button type="button" className="btn-ghost !px-2.5" onClick={handleLogin}>
-                  Sign in
-                </button>
-              ))}
-          </div>
-        </div>
-
-        {/* Open strip — compact */}
-        {openTabs.length > 0 && (
-          <div
-            className="flex flex-wrap items-center gap-2 rounded-xl px-2.5 py-1.5"
-            style={{ background: "var(--paper-2)", border: "1px solid var(--line)" }}
+          <button
+            type="button"
+            className="flex shrink-0 items-center gap-1.5"
+            onClick={() => setView("shelf")}
+            aria-label="TooManyTabs home"
           >
-            <span className="text-xs font-bold">
-              {openTabs.length} <span style={{ color: "var(--ink-3)", fontWeight: 500 }}>open</span>
-            </span>
-            {duplicateCount > 0 && (
-              <button
-                type="button"
-                className="text-[11px] font-semibold"
-                style={{ color: "var(--pop)" }}
-                onClick={handleCloseDuplicates}
-              >
-                · {duplicateCount} dupes
+            <CubeMark className="text-[var(--blue)]" />
+            <h1 className="font-display text-sm sm:text-base" style={{ color: "var(--ink)" }}>
+              TooMany<span style={{ color: "var(--pop)" }}>Tabs</span>
+            </h1>
+          </button>
+
+          {view === "shelf" && (
+            <div className="relative min-w-0 flex-1">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
+                style={{ color: "var(--ink-3)" }}
+              />
+              <Input
+                ref={searchRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search shelf…"
+                className="h-8 rounded-sm border pl-8 pr-3 text-xs shadow-none"
+                style={{
+                  background: "var(--paper-2)",
+                  borderColor: "var(--line)",
+                  color: "var(--ink)",
+                }}
+              />
+            </div>
+          )}
+          {view === "settings" && <div className="min-w-0 flex-1" />}
+
+          <div className="flex shrink-0 items-center gap-1">
+            <SyncChip state={isSyncing ? "syncing" : syncState} title={syncHint} />
+            {view === "shelf" && (
+              <>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  style={{
+                    background: viewMode === "list" ? "var(--blue-soft)" : undefined,
+                    color: viewMode === "list" ? "var(--blue)" : undefined,
+                  }}
+                  onClick={() => updatePrefs({ viewMode: "list" })}
+                  aria-label="List"
+                >
+                  <List className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  style={{
+                    background: viewMode === "grid" ? "var(--blue-soft)" : undefined,
+                    color: viewMode === "grid" ? "var(--blue)" : undefined,
+                  }}
+                  onClick={() => updatePrefs({ viewMode: "grid" })}
+                  aria-label="Grid"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className="btn-solid !h-8"
+                  onClick={() => setShowPark(true)}
+                  disabled={!openTabs.length}
+                >
+                  Park
+                </button>
+              </>
+            )}
+            {isAuthenticated && view === "shelf" && (
+              <button type="button" className="icon-btn" onClick={handleSync} aria-label="Sync" title="Sync">
+                <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
               </button>
             )}
-            <div className="ml-auto flex gap-1.5">
-              {domainSuggestions.length > 0 && (
-                <button type="button" className="btn-ghost" onClick={handleSmartGroup} disabled={isLoading}>
-                  <Sparkles className="h-3 w-3" />
-                  Auto
+            {isAuthenticated && view === "shelf" && (
+              <button type="button" className="icon-btn" onClick={handleLogout} aria-label="Sign out">
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {!isAuthenticated && view === "shelf" && (
+              <button
+                type="button"
+                className="btn-ghost !h-8 !text-[11px]"
+                onClick={handleLogin}
+                disabled={isAuthLoading}
+              >
+                {isAuthLoading ? "…" : "Sign in"}
+              </button>
+            )}
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => setView((v) => (v === "settings" ? "shelf" : "settings"))}
+              aria-label="Settings"
+              style={{
+                background: view === "settings" ? "var(--blue-soft)" : undefined,
+                color: view === "settings" ? "var(--blue)" : undefined,
+              }}
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {view === "shelf" && (
+          <>
+            <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--ink-3)" }}>
+              <span>
+                {openTabs.length} open
+                {dupeCount > 0 ? ` · ${dupeCount} dupes` : ""}
+              </span>
+              {dupeCount > 0 && (
+                <button type="button" className="btn-ghost !h-7 !text-[11px]" onClick={handleCloseDuplicates}>
+                  Close dupes
                 </button>
               )}
               <button
                 type="button"
-                className="btn-solid"
-                onClick={() => {
-                  setSaveName("")
-                  setSaveTarget("new")
-                  setShowSave(true)
-                }}
-                disabled={isLoading}
+                className="btn-ghost !h-7 !text-[11px]"
+                onClick={handleSortBySite}
+                disabled={openTabs.length < 2}
               >
-                <Plus className="h-3.5 w-3.5" />
-                Save
+                <Sparkles className="h-3 w-3" /> Sort by site
               </button>
+              {mergeSelect.size >= 2 && (
+                <button type="button" className="btn-blue !h-7 !text-[11px]" onClick={handleMerge}>
+                  <Merge className="h-3 w-3" /> Merge {mergeSelect.size}
+                </button>
+              )}
             </div>
-          </div>
-        )}
 
-        {/* Folder tabs */}
-        <div className="flex items-center gap-3 overflow-x-auto border-b pb-1.5" style={{ borderColor: "var(--line)" }}>
-          <button type="button" className="filter-tab" data-active={filter === "all"} onClick={() => setFilter("all")}>
-            All {allShelfTabs.length}
-          </button>
-          {sortedGroups.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              className="filter-tab inline-flex items-center gap-1"
-              data-active={filter === g.id}
-              onClick={() => setFilter(g.id)}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                setSelected((prev) => {
-                  const next = new Set(prev)
-                  if (next.has(g.id)) next.delete(g.id)
-                  else next.add(g.id)
-                  return next
-                })
-              }}
-            >
-              {g.pinned && <Pin className="h-2.5 w-2.5" style={{ color: "var(--pop)" }} />}
-              {selected.has(g.id) && <span style={{ color: "var(--pop)" }}>✓</span>}
-              {g.name}
-              <span style={{ opacity: 0.55 }}>{g.tabs.length}</span>
-            </button>
-          ))}
-          {selected.size >= 2 && (
-            <button type="button" className="btn-ghost ml-auto !h-6" onClick={handleMergeSelected}>
-              <Merge className="h-3 w-3" />
-              Merge
-            </button>
-          )}
-          {activeFolder && (
-            <div className="ml-auto flex shrink-0 gap-0.5">
+            <div className="flex flex-wrap items-center gap-1">
               <button
                 type="button"
-                className="icon-btn"
-                title="Rename"
-                onClick={() => {
-                  setEditingFolder(activeFolder.id)
-                  setEditName(activeFolder.name)
-                }}
+                className="filter-tab"
+                data-active={filter === "later"}
+                onClick={() => setFilter("later")}
               >
-                <span className="text-[10px] font-bold">Aa</span>
+                {LATER_SHELF_NAME}
+                {sortedShelves.later ? ` (${sortedShelves.later.tabs.length})` : ""}
               </button>
               <button
                 type="button"
-                className="icon-btn"
-                title="Restore"
-                onClick={async () => {
-                  await restoreTabs(activeFolder.tabs.map((t) => t.url))
-                  toast("Opened", "success")
-                }}
+                className="filter-tab"
+                data-active={filter === "all"}
+                onClick={() => setFilter("all")}
               >
-                <RotateCcw className="h-3.5 w-3.5" />
+                All
               </button>
-              <button
-                type="button"
-                className="icon-btn"
-                title="Pin"
-                onClick={async () => {
-                  await togglePin(activeFolder.id)
-                  await loadGroups()
-                }}
-              >
-                <Pin className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                className="icon-btn"
-                title="Delete"
-                onClick={() =>
-                  setConfirm({
-                    title: `Delete “${activeFolder.name}”?`,
-                    description: `${activeFolder.tabs.length} tabs will leave this shelf.`,
-                    confirmLabel: "Delete",
-                    onConfirm: async () => {
-                      await deleteGroup(activeFolder.id)
-                      setFilter("all")
-                      await loadGroups()
-                      toast("Deleted", "info")
-                    },
-                  })
-                }
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              {sortedShelves.rest.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  className="filter-tab inline-flex items-center gap-1"
+                  data-active={filter === g.id}
+                  onClick={() => setFilter(g.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setMergeSelect((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(g.id)) next.delete(g.id)
+                      else next.add(g.id)
+                      return next
+                    })
+                    toast("Shelf selected for merge (right-click more, then Merge)", "info")
+                  }}
+                >
+                  {g.pinned && <Pin className="h-2.5 w-2.5" />}
+                  {g.name}
+                  <span style={{ opacity: 0.55 }}>({g.tabs.length})</span>
+                </button>
+              ))}
             </div>
-          )}
-        </div>
 
-        {editingFolder && (
-          <input
-            autoFocus
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            onBlur={() => commitRename(editingFolder)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitRename(editingFolder)
-              if (e.key === "Escape") setEditingFolder(null)
-            }}
-            className="h-7 w-full rounded-lg border bg-transparent px-2 text-sm font-semibold outline-none"
-            style={{ borderColor: "var(--pop)", color: "var(--ink)" }}
-          />
-        )}
+            {filter !== "all" && filter !== "later" && (
+              <div className="flex flex-wrap items-center gap-1">
+                {editingFolder === filter ? (
+                  <input
+                    className="h-7 rounded-sm border px-2 text-sm outline-none"
+                    style={{ borderColor: "var(--line)", background: "var(--paper-2)", color: "var(--ink)" }}
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onBlur={() => commitRename(filter)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitRename(filter)
+                      if (e.key === "Escape") setEditingFolder(null)
+                    }}
+                    autoFocus
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-ghost !h-7 !text-[11px]"
+                    onClick={() => {
+                      const g = groups.find((x) => x.id === filter)
+                      setEditName(g?.name || "")
+                      setEditingFolder(filter)
+                    }}
+                  >
+                    Rename
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-ghost !h-7 !text-[11px]"
+                  onClick={async () => {
+                    await togglePin(filter)
+                    await loadGroups()
+                  }}
+                >
+                  Pin
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost !h-7 !text-[11px]"
+                  onClick={async () => {
+                    const g = groups.find((x) => x.id === filter)
+                    if (!g?.tabs.length) return
+                    await restoreTabs(g.tabs.map((t) => t.url))
+                    toast("Restored", "success")
+                  }}
+                >
+                  <RotateCcw className="h-3 w-3" /> Restore
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost !h-7 !text-[11px]"
+                  style={{ color: "var(--danger)" }}
+                  onClick={() => setConfirmDelete(filter)}
+                >
+                  <Trash2 className="h-3 w-3" /> Delete
+                </button>
+              </div>
+            )}
 
-        {filter === "all" && visibleTabs.length > 0 && (
-          <div className="flex items-center justify-between px-0.5">
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--ink-3)" }}>
-              {visibleTabs.length} tabs
-            </p>
-            <button
-              type="button"
-              className="text-[11px] font-semibold"
-              style={{ color: "var(--ok)" }}
-              onClick={async () => {
-                await restoreTabs(visibleTabs.map((i) => i.tab.url))
-                toast("Restored", "success")
-              }}
-            >
-              Restore all
-            </button>
-          </div>
+            {filter === "later" && sortedShelves.later && sortedShelves.later.tabs.length > 0 && (
+              <button
+                type="button"
+                className="btn-ghost !h-7 !text-[11px]"
+                onClick={async () => {
+                  await restoreTabs(sortedShelves.later!.tabs.map((t) => t.url))
+                  toast("Restored Later", "success")
+                }}
+              >
+                <RotateCcw className="h-3 w-3" /> Restore Later
+              </button>
+            )}
+          </>
         )}
       </header>
 
-      {/* —— Tabs (~80%) —— */}
-      <main className="app-tabs" onClick={() => showTheme && setShowTheme(false)}>
-        {visibleTabs.length === 0 && (
-          <div className="flex h-full min-h-[12rem] flex-col items-center justify-center px-4 text-center">
-            <p className="font-display text-lg font-bold">
-              {query ? "No matches" : "Empty shelf"}
-            </p>
-            <p className="mt-1 max-w-xs text-xs" style={{ color: "var(--ink-3)" }}>
-              {query ? "Try another search." : "Save open tabs — they live here until you need them."}
-            </p>
-            {openTabs.length > 0 && !query && (
-              <button type="button" className="btn-solid mt-4" onClick={() => setShowSave(true)}>
-                <Plus className="h-3.5 w-3.5" />
-                Save {openTabs.length}
-              </button>
+      <main className="app-tabs" onClick={() => setMoveMenu(null)}>
+        {view === "settings" ? (
+          <SettingsPage
+            prefs={prefs}
+            user={user}
+            syncState={isSyncing ? "syncing" : syncState}
+            syncHint={syncHint}
+            onBack={() => setView("shelf")}
+            onPrefs={updatePrefs}
+            onLogin={handleLogin}
+            onLogout={handleLogout}
+            onSync={handleSync}
+            onExport={handleExport}
+            onImport={handleImport}
+            authLoading={isAuthLoading}
+            syncing={isSyncing}
+          />
+        ) : (
+          <>
+            {!prefs.onboardingDismissed && (
+              <Onboarding onDismiss={() => updatePrefs({ onboardingDismissed: true })} />
             )}
-          </div>
-        )}
 
-        {visibleTabs.length > 0 && view === "list" && (
-          <div>
-            {visibleTabs.map((item) => (
-              <div key={item.key} className="row-item group">
-                <Fav url={item.tab.favIconUrl} title={item.tab.title} />
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-semibold leading-tight">
-                    {item.tab.title || "Untitled"}
-                  </p>
-                  <p className="truncate text-[11px]" style={{ color: "var(--ink-3)" }}>
-                    {filter === "all" && (
-                      <span style={{ color: "var(--pop)" }}>{item.groupName} · </span>
-                    )}
-                    {item.tab.url.replace(/^https?:\/\//, "")}
-                  </p>
-                </div>
-                <div className="row-actions">
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    aria-label="Copy"
-                    onClick={() => {
-                      navigator.clipboard?.writeText(item.tab.url)
-                      toast("Copied", "success")
-                    }}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    aria-label="Open"
-                    onClick={() => restoreSingleTab(item.tab.url)}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    aria-label="Remove"
-                    onClick={async () => {
-                      setGroups(await deleteTabFromGroup(item.groupId, item.tabIndex))
-                      toast("Removed", "info")
-                    }}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {visibleTabs.length > 0 && view === "grid" && (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {visibleTabs.map((item) => (
-              <div key={item.key} className="grid-item">
-                <div className="flex items-start gap-2.5">
-                  <div
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                    style={{ background: "var(--pop-soft)" }}
-                  >
-                    <Fav url={item.tab.favIconUrl} title={item.tab.title} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 text-xs font-semibold leading-snug">
-                      {item.tab.title || "Untitled"}
-                    </p>
-                    {filter === "all" && (
-                      <p className="mt-0.5 text-[10px] font-bold" style={{ color: "var(--pop)" }}>
-                        {item.groupName}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <p className="truncate text-[10px]" style={{ color: "var(--ink-3)" }}>
-                  {item.tab.url.replace(/^https?:\/\//, "")}
+            {visibleTabs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+                <CubeMark idle className="text-[var(--blue)] h-10 w-10" />
+                <p className="font-display text-sm" style={{ color: "var(--ink)" }}>
+                  {query
+                    ? "No matches"
+                    : filter === "later"
+                      ? "Nothing in Later"
+                      : "Empty shelf"}
                 </p>
-                <div className="mt-auto flex gap-1.5">
-                  <button
-                    type="button"
-                    className="btn-ghost flex-1 !h-7"
-                    onClick={() => restoreSingleTab(item.tab.url)}
-                  >
-                    Open
+                <p className="max-w-xs text-xs" style={{ color: "var(--ink-3)" }}>
+                  {query
+                    ? "Try another search."
+                    : "Park open tabs here — your daily inbox for “open later”."}
+                </p>
+                {!query && openTabs.length > 0 && (
+                  <button type="button" className="btn-solid" onClick={() => setShowPark(true)}>
+                    Park open tabs
                   </button>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    style={{ background: "color-mix(in srgb, var(--danger) 12%, transparent)", color: "var(--danger)" }}
-                    onClick={async () => setGroups(await deleteTabFromGroup(item.groupId, item.tabIndex))}
-                    aria-label="Remove"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                )}
               </div>
-            ))}
-          </div>
+            ) : viewMode === "list" ? (
+              <div className="space-y-0.5">
+                {visibleTabs.map((t) => (
+                  <div key={`${t.groupId}-${t.index}-${t.url}`} className="row-item relative">
+                    {t.favIconUrl ? (
+                      <img src={t.favIconUrl} alt="" className="h-4 w-4" />
+                    ) : (
+                      <span className="h-4 w-4 bg-[var(--paper-3)]" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{t.title}</p>
+                      <p className="truncate text-[11px]" style={{ color: "var(--ink-3)" }}>
+                        {filter === "all" ? `${t.groupName} · ` : ""}
+                        {t.url}
+                      </p>
+                    </div>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="Open"
+                        onClick={async () => {
+                          await restoreSingleTab(t.url)
+                          toast("Opened", "success")
+                        }}
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="Copy"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(t.url)
+                          toast("Copied", "success")
+                        }}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="Move to…"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setMoveMenu({ groupId: t.groupId, index: t.index })
+                        }}
+                      >
+                        <FolderInput className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="Remove"
+                        onClick={async () => {
+                          await deleteTabFromGroup(t.groupId, t.index)
+                          toast("Removed", "info")
+                          await loadGroups()
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {moveMenu?.groupId === t.groupId && moveMenu.index === t.index && (
+                      <div
+                        className="panel absolute right-0 top-9 z-30 min-w-[160px] p-1 shadow-sm"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <p className="px-2 py-1 text-[10px] font-bold uppercase" style={{ color: "var(--ink-3)" }}>
+                          Move to
+                        </p>
+                        {groups
+                          .filter((g) => g.id !== t.groupId)
+                          .map((g) => (
+                            <button
+                              key={g.id}
+                              type="button"
+                              className="block w-full rounded-sm px-2 py-1.5 text-left text-xs hover:bg-[var(--blue-soft)]"
+                              onClick={async () => {
+                                await moveTabToGroup(t.groupId, t.index, g.id)
+                                setMoveMenu(null)
+                                toast(`Moved to ${g.name}`, "success")
+                                await loadGroups()
+                              }}
+                            >
+                              {g.name}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {visibleTabs.map((t) => (
+                  <div key={`${t.groupId}-${t.index}-${t.url}`} className="grid-item">
+                    <div className="flex items-start gap-2">
+                      {t.favIconUrl ? (
+                        <img src={t.favIconUrl} alt="" className="mt-0.5 h-4 w-4" />
+                      ) : (
+                        <span className="mt-0.5 h-4 w-4 bg-[var(--paper-3)]" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{t.title}</p>
+                        <p className="truncate text-[11px]" style={{ color: "var(--ink-3)" }}>
+                          {t.groupName}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        className="btn-ghost flex-1 !h-7 !text-[11px]"
+                        onClick={async () => {
+                          await restoreSingleTab(t.url)
+                          toast("Opened", "success")
+                        }}
+                      >
+                        Open
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={async () => {
+                          await deleteTabFromGroup(t.groupId, t.index)
+                          await loadGroups()
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </main>
 
-      {showSave && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/25 p-3 backdrop-blur-[2px] sm:items-center">
-          <div
-            className="w-full max-w-sm rounded-2xl border p-4"
-            style={{
-              background: "var(--paper-2)",
-              borderColor: "var(--line-2)",
-              boxShadow: "0 20px 50px rgba(0,0,0,0.18)",
-            }}
-          >
-            <h3 className="font-display text-lg font-bold">Save to shelf</h3>
-            <p className="mt-0.5 text-xs" style={{ color: "var(--ink-3)" }}>
-              New folder or add to an existing one.
-            </p>
+      <Credits />
 
-            <select
-              value={saveTarget}
-              onChange={(e) => setSaveTarget(e.target.value)}
-              className="mt-3 h-9 w-full rounded-xl border px-2.5 text-sm outline-none"
-              style={{ background: "var(--paper)", borderColor: "var(--line)", color: "var(--ink)" }}
-            >
-              <option value="new">New folder</option>
-              {sortedGroups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
-
-            {saveTarget === "new" && (
-              <>
-                <Input
-                  value={saveName}
-                  onChange={(e) => setSaveName(e.target.value)}
-                  placeholder="College, Work, Later…"
-                  className="mt-2 h-9 rounded-xl border text-sm"
-                  style={{ background: "var(--paper)", borderColor: "var(--line)" }}
-                  autoFocus
-                  onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                />
-                <div className="mt-1.5 flex flex-wrap gap-2">
-                  {["College", "Work", "Reading", "Later"].map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      className="text-[11px] font-semibold"
-                      style={{ color: "var(--pop)" }}
-                      onClick={() => setSaveName(p)}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-
-            <div className="mt-4 flex gap-2">
-              <button type="button" className="btn-ghost flex-1" onClick={() => setShowSave(false)}>
-                Cancel
-              </button>
-              <button type="button" className="btn-solid flex-1" onClick={handleSave} disabled={isLoading}>
-                {isLoading ? "…" : `Save ${openTabs.length}`}
-              </button>
-            </div>
-          </div>
-        </div>
+      {showPark && (
+        <ParkModal
+          openTabs={openTabs}
+          groups={groups}
+          closeOnPark={closeOnPark}
+          onCloseOnParkChange={(v) => updatePrefs({ closeOnPark: v })}
+          onClose={() => setShowPark(false)}
+          onPark={handlePark}
+          busy={isParking}
+        />
       )}
 
       <ConfirmDialog
-        open={!!confirm}
-        title={confirm?.title || ""}
-        description={confirm?.description || ""}
-        confirmLabel={confirm?.confirmLabel}
+        open={!!confirmDelete}
+        title="Delete shelf?"
+        description="This removes the shelf and its parked tabs from this device (and syncs the delete when signed in)."
+        confirmLabel="Delete"
         dangerous
-        onClose={() => setConfirm(null)}
-        onConfirm={() => confirm?.onConfirm()}
+        onConfirm={async () => {
+          if (!confirmDelete || confirmDelete === LATER_SHELF_ID) return
+          await deleteGroup(confirmDelete)
+          setConfirmDelete(null)
+          setFilter("later")
+          toast("Deleted", "info")
+          await loadGroups()
+        }}
+        onClose={() => setConfirmDelete(null)}
       />
     </div>
   )
