@@ -213,6 +213,54 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
   background: var(--paper-2);
 }
 
+.filter-tab[data-selected="true"] {
+  outline: 1px dashed var(--blue);
+  outline-offset: 1px;
+}
+
+.shelf-rail {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.shelf-rail-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 0.15rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 1px;
+}
+
+.shelf-rail-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.45rem;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  font-size: 0.75rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;

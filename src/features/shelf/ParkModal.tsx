@@ -18,6 +18,9 @@ export function ParkModal({
   onCloseOnParkChange,
   onClose,
   onPark,
+  onCloseDuplicates,
+  onSortBySite,
+  dupeCount = 0,
   busy,
 }: {
   openTabs: OpenTab[]
@@ -30,6 +33,9 @@ export function ParkModal({
     dest: Dest
     newName: string
   }) => Promise<void>
+  onCloseDuplicates?: () => Promise<void>
+  onSortBySite?: () => Promise<void>
+  dupeCount?: number
   busy?: boolean
 }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set(openTabs.map((t) => t.id)))
@@ -150,6 +156,31 @@ export function ParkModal({
           />
           Close parked tabs after saving
         </label>
+
+        {(onCloseDuplicates || onSortBySite) && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {dupeCount > 0 && onCloseDuplicates && (
+              <button
+                type="button"
+                className="btn-ghost !h-7 !text-[11px]"
+                disabled={busy}
+                onClick={() => void onCloseDuplicates()}
+              >
+                Close {dupeCount} duplicate{dupeCount === 1 ? "" : "s"}
+              </button>
+            )}
+            {onSortBySite && openTabs.length >= 2 && (
+              <button
+                type="button"
+                className="btn-ghost !h-7 !text-[11px]"
+                disabled={busy}
+                onClick={() => void onSortBySite()}
+              >
+                Sort window by site
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="mt-4 flex gap-2">
           <button type="button" className="btn-ghost flex-1" onClick={onClose} disabled={busy}>

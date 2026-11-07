@@ -11,12 +11,8 @@ import { Onboarding } from "@/features/shelf/Onboarding"
 import { SyncChip, type SyncState } from "@/features/shelf/SyncChip"
 import { SettingsPage } from "@/features/settings/SettingsPage"
 import {
-  LayoutGrid,
-  List,
   Search,
   Settings,
-  LogOut,
-  RefreshCw,
   ExternalLink,
   Copy,
   Trash2,
@@ -24,7 +20,7 @@ import {
   RotateCcw,
   FolderInput,
   Merge,
-  Sparkles,
+  MoreHorizontal,
 } from "lucide-react"
 import {
   googleLogin,
@@ -51,7 +47,6 @@ import {
   importGroupsJson,
   getSyncMeta,
   LATER_SHELF_ID,
-  LATER_SHELF_NAME,
   type TabGroup,
   type TabData,
   type AuthUser,
@@ -92,6 +87,8 @@ function AppInner() {
   const [mergeSelect, setMergeSelect] = useState<Set<string>>(new Set())
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [moveMenu, setMoveMenu] = useState<{ groupId: string; index: number } | null>(null)
+  const [shelfMenuOpen, setShelfMenuOpen] = useState(false)
+  const [rowMenu, setRowMenu] = useState<{ groupId: string; index: number } | null>(null)
 
   const applyTheme = (p: AppPrefs) => {
     document.documentElement.dataset.mode = p.themeMode
@@ -228,7 +225,7 @@ function AppInner() {
 
   const visibleTabs = useMemo(() => {
     const q = query.trim().toLowerCase()
-    let list: Array<TabData & { groupId: string; groupName: string; index: number }> = []
+    const list: Array<TabData & { groupId: string; groupName: string; index: number }> = []
     const source =
       filter === "all"
         ? groups
@@ -248,8 +245,29 @@ function AppInner() {
         }
       })
     }
-    return list
+
+    return list.sort((a, b) => {
+      if (filter === "all") {
+        const byShelf = a.groupName.localeCompare(b.groupName)
+        if (byShelf !== 0) return byShelf
+      }
+      return a.title.localeCompare(b.title) || a.index - b.index
+    })
   }, [groups, filter, query])
+
+  const activeShelf = useMemo(() => {
+    if (filter === "later") return sortedShelves.later || null
+    if (filter === "all") return null
+    return groups.find((g) => g.id === filter) || null
+  }, [filter, groups, sortedShelves.later])
+
+  const hostOf = (url: string) => {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "")
+    } catch {
+      return url
+    }
+  }
 
   const dupes = useMemo(() => findDuplicateOpenTabs(openTabs), [openTabs])
   const dupeCount = [...dupes.values()].reduce((n, ids) => n + (ids.length - 1), 0)
@@ -445,7 +463,7 @@ function AppInner() {
 
   return (
     <div className="app-shell">
-      <header className="app-chrome space-y-2.5">
+      <header className="app-chrome space-y-2">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -454,12 +472,12 @@ function AppInner() {
             aria-label="TooManyTabs home"
           >
             <CubeMark className="text-[var(--blue)]" />
-            <h1 className="font-display text-sm sm:text-base" style={{ color: "var(--ink)" }}>
+            <h1 className="font-display text-sm" style={{ color: "var(--ink)" }}>
               TooMany<span style={{ color: "var(--pop)" }}>Tabs</span>
             </h1>
           </button>
 
-          {view === "shelf" && (
+          {view === "shelf" ? (
             <div className="relative min-w-0 flex-1">
               <Search
                 className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
@@ -469,7 +487,7 @@ function AppInner() {
                 ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search shelf…"
+                placeholder="Search…"
                 className="h-8 rounded-sm border pl-8 pr-3 text-xs shadow-none"
                 style={{
                   background: "var(--paper-2)",
@@ -478,65 +496,23 @@ function AppInner() {
                 }}
               />
             </div>
+          ) : (
+            <div className="min-w-0 flex-1" />
           )}
-          {view === "settings" && <div className="min-w-0 flex-1" />}
 
           <div className="flex shrink-0 items-center gap-1">
-            <SyncChip state={isSyncing ? "syncing" : syncState} title={syncHint} />
+            {(syncState === "error" || isSyncing) && (
+              <SyncChip state={isSyncing ? "syncing" : syncState} title={syncHint} />
+            )}
             {view === "shelf" && (
-              <>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  style={{
-                    background: viewMode === "list" ? "var(--blue-soft)" : undefined,
-                    color: viewMode === "list" ? "var(--blue)" : undefined,
-                  }}
-                  onClick={() => updatePrefs({ viewMode: "list" })}
-                  aria-label="List"
-                >
-                  <List className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  style={{
-                    background: viewMode === "grid" ? "var(--blue-soft)" : undefined,
-                    color: viewMode === "grid" ? "var(--blue)" : undefined,
-                  }}
-                  onClick={() => updatePrefs({ viewMode: "grid" })}
-                  aria-label="Grid"
-                >
-                  <LayoutGrid className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="btn-solid !h-8"
-                  onClick={() => setShowPark(true)}
-                  disabled={!openTabs.length}
-                >
-                  Park
-                </button>
-              </>
-            )}
-            {isAuthenticated && view === "shelf" && (
-              <button type="button" className="icon-btn" onClick={handleSync} aria-label="Sync" title="Sync">
-                <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-              </button>
-            )}
-            {isAuthenticated && view === "shelf" && (
-              <button type="button" className="icon-btn" onClick={handleLogout} aria-label="Sign out">
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
-            )}
-            {!isAuthenticated && view === "shelf" && (
               <button
                 type="button"
-                className="btn-ghost !h-8 !text-[11px]"
-                onClick={handleLogin}
-                disabled={isAuthLoading}
+                className="btn-solid !h-8"
+                onClick={() => setShowPark(true)}
+                disabled={!openTabs.length}
+                title={openTabs.length ? `${openTabs.length} open tabs` : "No open tabs"}
               >
-                {isAuthLoading ? "…" : "Sign in"}
+                Park{openTabs.length ? ` · ${openTabs.length}` : ""}
               </button>
             )}
             <button
@@ -555,47 +531,30 @@ function AppInner() {
         </div>
 
         {view === "shelf" && (
-          <>
-            <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--ink-3)" }}>
-              <span>
-                {openTabs.length} open
-                {dupeCount > 0 ? ` · ${dupeCount} dupes` : ""}
-              </span>
-              {dupeCount > 0 && (
-                <button type="button" className="btn-ghost !h-7 !text-[11px]" onClick={handleCloseDuplicates}>
-                  Close dupes
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn-ghost !h-7 !text-[11px]"
-                onClick={handleSortBySite}
-                disabled={openTabs.length < 2}
-              >
-                <Sparkles className="h-3 w-3" /> Sort by site
-              </button>
-              {mergeSelect.size >= 2 && (
-                <button type="button" className="btn-blue !h-7 !text-[11px]" onClick={handleMerge}>
-                  <Merge className="h-3 w-3" /> Merge {mergeSelect.size}
-                </button>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-1">
+          <div className="shelf-rail">
+            <div className="shelf-rail-scroll">
               <button
                 type="button"
                 className="filter-tab"
                 data-active={filter === "later"}
-                onClick={() => setFilter("later")}
+                onClick={() => {
+                  setFilter("later")
+                  setShelfMenuOpen(false)
+                }}
               >
-                {LATER_SHELF_NAME}
-                {sortedShelves.later ? ` (${sortedShelves.later.tabs.length})` : ""}
+                Later
+                {sortedShelves.later && sortedShelves.later.tabs.length > 0
+                  ? ` ${sortedShelves.later.tabs.length}`
+                  : ""}
               </button>
               <button
                 type="button"
                 className="filter-tab"
                 data-active={filter === "all"}
-                onClick={() => setFilter("all")}
+                onClick={() => {
+                  setFilter("all")
+                  setShelfMenuOpen(false)
+                }}
               >
                 All
               </button>
@@ -605,7 +564,11 @@ function AppInner() {
                   type="button"
                   className="filter-tab inline-flex items-center gap-1"
                   data-active={filter === g.id}
-                  onClick={() => setFilter(g.id)}
+                  data-selected={mergeSelect.has(g.id) || undefined}
+                  onClick={() => {
+                    setFilter(g.id)
+                    setShelfMenuOpen(false)
+                  }}
                   onContextMenu={(e) => {
                     e.preventDefault()
                     setMergeSelect((prev) => {
@@ -614,94 +577,132 @@ function AppInner() {
                       else next.add(g.id)
                       return next
                     })
-                    toast("Shelf selected for merge (right-click more, then Merge)", "info")
                   }}
                 >
-                  {g.pinned && <Pin className="h-2.5 w-2.5" />}
+                  {g.pinned ? <Pin className="h-2.5 w-2.5" /> : null}
                   {g.name}
-                  <span style={{ opacity: 0.55 }}>({g.tabs.length})</span>
                 </button>
               ))}
             </div>
 
-            {filter !== "all" && filter !== "later" && (
-              <div className="flex flex-wrap items-center gap-1">
-                {editingFolder === filter ? (
-                  <input
-                    className="h-7 rounded-sm border px-2 text-sm outline-none"
-                    style={{ borderColor: "var(--line)", background: "var(--paper-2)", color: "var(--ink)" }}
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    onBlur={() => commitRename(filter)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitRename(filter)
-                      if (e.key === "Escape") setEditingFolder(null)
-                    }}
-                    autoFocus
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="btn-ghost !h-7 !text-[11px]"
-                    onClick={() => {
-                      const g = groups.find((x) => x.id === filter)
-                      setEditName(g?.name || "")
-                      setEditingFolder(filter)
-                    }}
-                  >
-                    Rename
-                  </button>
-                )}
+            <div className="relative flex shrink-0 items-center gap-0.5">
+              {activeShelf && activeShelf.tabs.length > 0 && (
                 <button
                   type="button"
-                  className="btn-ghost !h-7 !text-[11px]"
+                  className="icon-btn"
+                  title="Restore shelf"
                   onClick={async () => {
-                    await togglePin(filter)
-                    await loadGroups()
-                  }}
-                >
-                  Pin
-                </button>
-                <button
-                  type="button"
-                  className="btn-ghost !h-7 !text-[11px]"
-                  onClick={async () => {
-                    const g = groups.find((x) => x.id === filter)
-                    if (!g?.tabs.length) return
-                    await restoreTabs(g.tabs.map((t) => t.url))
+                    await restoreTabs(activeShelf.tabs.map((t) => t.url))
                     toast("Restored", "success")
                   }}
                 >
-                  <RotateCcw className="h-3 w-3" /> Restore
+                  <RotateCcw className="h-3.5 w-3.5" />
                 </button>
+              )}
+              {mergeSelect.size >= 2 && (
                 <button
                   type="button"
-                  className="btn-ghost !h-7 !text-[11px]"
-                  style={{ color: "var(--danger)" }}
-                  onClick={() => setConfirmDelete(filter)}
+                  className="icon-btn"
+                  title={`Merge ${mergeSelect.size} shelves`}
+                  onClick={handleMerge}
                 >
-                  <Trash2 className="h-3 w-3" /> Delete
+                  <Merge className="h-3.5 w-3.5" />
                 </button>
-              </div>
-            )}
-
-            {filter === "later" && sortedShelves.later && sortedShelves.later.tabs.length > 0 && (
-              <button
-                type="button"
-                className="btn-ghost !h-7 !text-[11px]"
-                onClick={async () => {
-                  await restoreTabs(sortedShelves.later!.tabs.map((t) => t.url))
-                  toast("Restored Later", "success")
-                }}
-              >
-                <RotateCcw className="h-3 w-3" /> Restore Later
-              </button>
-            )}
-          </>
+              )}
+              {activeShelf && filter !== "later" && (
+                <>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label="Shelf options"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShelfMenuOpen((v) => !v)
+                      setRowMenu(null)
+                      setMoveMenu(null)
+                    }}
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </button>
+                  {shelfMenuOpen && (
+                    <div
+                      className="panel absolute right-0 top-9 z-30 min-w-[150px] p-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {editingFolder === filter ? (
+                        <input
+                          className="mb-1 h-7 w-full rounded-sm border px-2 text-xs outline-none"
+                          style={{
+                            borderColor: "var(--line)",
+                            background: "var(--paper)",
+                            color: "var(--ink)",
+                          }}
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          onBlur={() => {
+                            commitRename(filter)
+                            setShelfMenuOpen(false)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              commitRename(filter)
+                              setShelfMenuOpen(false)
+                            }
+                            if (e.key === "Escape") setEditingFolder(null)
+                          }}
+                          autoFocus
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="menu-item"
+                          onClick={() => {
+                            setEditName(activeShelf.name)
+                            setEditingFolder(filter)
+                          }}
+                        >
+                          Rename
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="menu-item"
+                        onClick={async () => {
+                          await togglePin(filter)
+                          setShelfMenuOpen(false)
+                          await loadGroups()
+                        }}
+                      >
+                        {activeShelf.pinned ? "Unpin" : "Pin"}
+                      </button>
+                      <button
+                        type="button"
+                        className="menu-item"
+                        style={{ color: "var(--danger)" }}
+                        onClick={() => {
+                          setShelfMenuOpen(false)
+                          setConfirmDelete(filter)
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
         )}
       </header>
 
-      <main className="app-tabs" onClick={() => setMoveMenu(null)}>
+      <main
+        className="app-tabs"
+        onClick={() => {
+          setMoveMenu(null)
+          setRowMenu(null)
+          setShelfMenuOpen(false)
+        }}
+      >
         {view === "settings" ? (
           <SettingsPage
             prefs={prefs}
@@ -747,137 +748,161 @@ function AppInner() {
               </div>
             ) : viewMode === "list" ? (
               <div className="space-y-0.5">
-                {visibleTabs.map((t) => (
-                  <div key={`${t.groupId}-${t.index}-${t.url}`} className="row-item relative">
-                    {t.favIconUrl ? (
-                      <img src={t.favIconUrl} alt="" className="h-4 w-4" />
-                    ) : (
-                      <span className="h-4 w-4 bg-[var(--paper-3)]" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{t.title}</p>
-                      <p className="truncate text-[11px]" style={{ color: "var(--ink-3)" }}>
-                        {filter === "all" ? `${t.groupName} · ` : ""}
-                        {t.url}
-                      </p>
-                    </div>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Open"
-                        onClick={async () => {
-                          await restoreSingleTab(t.url)
-                          toast("Opened", "success")
-                        }}
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Copy"
-                        onClick={async () => {
-                          await navigator.clipboard.writeText(t.url)
-                          toast("Copied", "success")
-                        }}
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Move to…"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setMoveMenu({ groupId: t.groupId, index: t.index })
-                        }}
-                      >
-                        <FolderInput className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Remove"
-                        onClick={async () => {
-                          await deleteTabFromGroup(t.groupId, t.index)
-                          toast("Removed", "info")
-                          await loadGroups()
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    {moveMenu?.groupId === t.groupId && moveMenu.index === t.index && (
-                      <div
-                        className="panel absolute right-0 top-9 z-30 min-w-[160px] p-1 shadow-sm"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <p className="px-2 py-1 text-[10px] font-bold uppercase" style={{ color: "var(--ink-3)" }}>
-                          Move to
+                {visibleTabs.map((t) => {
+                  const menuOpen =
+                    rowMenu?.groupId === t.groupId && rowMenu.index === t.index
+                  const moveOpen =
+                    moveMenu?.groupId === t.groupId && moveMenu.index === t.index
+                  return (
+                    <div
+                      key={`${t.groupId}-${t.index}-${t.url}`}
+                      className="row-item relative"
+                      onDoubleClick={async () => {
+                        await restoreSingleTab(t.url)
+                        toast("Opened", "success")
+                      }}
+                    >
+                      {t.favIconUrl ? (
+                        <img src={t.favIconUrl} alt="" className="h-4 w-4 shrink-0" />
+                      ) : (
+                        <span className="h-4 w-4 shrink-0 bg-[var(--paper-3)]" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{t.title || hostOf(t.url)}</p>
+                        <p className="truncate text-[11px]" style={{ color: "var(--ink-3)" }}>
+                          {filter === "all" ? `${t.groupName} · ` : ""}
+                          {hostOf(t.url)}
                         </p>
-                        {groups
-                          .filter((g) => g.id !== t.groupId)
-                          .map((g) => (
-                            <button
-                              key={g.id}
-                              type="button"
-                              className="block w-full rounded-sm px-2 py-1.5 text-left text-xs hover:bg-[var(--blue-soft)]"
-                              onClick={async () => {
-                                await moveTabToGroup(t.groupId, t.index, g.id)
-                                setMoveMenu(null)
-                                toast(`Moved to ${g.name}`, "success")
-                                await loadGroups()
-                              }}
-                            >
-                              {g.name}
-                            </button>
-                          ))}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Open"
+                          onClick={async () => {
+                            await restoreSingleTab(t.url)
+                            toast("Opened", "success")
+                          }}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="More"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setRowMenu(menuOpen ? null : { groupId: t.groupId, index: t.index })
+                            setMoveMenu(null)
+                            setShelfMenuOpen(false)
+                          }}
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      {menuOpen && (
+                        <div
+                          className="panel absolute right-0 top-9 z-30 min-w-[150px] p-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            className="menu-item"
+                            onClick={async () => {
+                              await navigator.clipboard.writeText(t.url)
+                              setRowMenu(null)
+                              toast("Copied", "success")
+                            }}
+                          >
+                            <Copy className="h-3 w-3" /> Copy link
+                          </button>
+                          <button
+                            type="button"
+                            className="menu-item"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setMoveMenu({ groupId: t.groupId, index: t.index })
+                              setRowMenu(null)
+                            }}
+                          >
+                            <FolderInput className="h-3 w-3" /> Move to…
+                          </button>
+                          <button
+                            type="button"
+                            className="menu-item"
+                            style={{ color: "var(--danger)" }}
+                            onClick={async () => {
+                              await deleteTabFromGroup(t.groupId, t.index)
+                              setRowMenu(null)
+                              toast("Removed", "info")
+                              await loadGroups()
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" /> Remove
+                          </button>
+                        </div>
+                      )}
+                      {moveOpen && (
+                        <div
+                          className="panel absolute right-0 top-9 z-30 min-w-[160px] p-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <p
+                            className="px-2 py-1 text-[10px] font-bold uppercase"
+                            style={{ color: "var(--ink-3)" }}
+                          >
+                            Move to
+                          </p>
+                          {groups
+                            .filter((g) => g.id !== t.groupId)
+                            .map((g) => (
+                              <button
+                                key={g.id}
+                                type="button"
+                                className="menu-item"
+                                onClick={async () => {
+                                  await moveTabToGroup(t.groupId, t.index, g.id)
+                                  setMoveMenu(null)
+                                  toast(`Moved to ${g.name}`, "success")
+                                  await loadGroups()
+                                }}
+                              >
+                                {g.name}
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {visibleTabs.map((t) => (
-                  <div key={`${t.groupId}-${t.index}-${t.url}`} className="grid-item">
+                  <button
+                    key={`${t.groupId}-${t.index}-${t.url}`}
+                    type="button"
+                    className="grid-item text-left"
+                    onClick={async () => {
+                      await restoreSingleTab(t.url)
+                      toast("Opened", "success")
+                    }}
+                  >
                     <div className="flex items-start gap-2">
                       {t.favIconUrl ? (
-                        <img src={t.favIconUrl} alt="" className="mt-0.5 h-4 w-4" />
+                        <img src={t.favIconUrl} alt="" className="mt-0.5 h-4 w-4 shrink-0" />
                       ) : (
-                        <span className="mt-0.5 h-4 w-4 bg-[var(--paper-3)]" />
+                        <span className="mt-0.5 h-4 w-4 shrink-0 bg-[var(--paper-3)]" />
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">{t.title}</p>
+                        <p className="truncate text-sm font-semibold">{t.title || hostOf(t.url)}</p>
                         <p className="truncate text-[11px]" style={{ color: "var(--ink-3)" }}>
-                          {t.groupName}
+                          {filter === "all" ? `${t.groupName} · ` : ""}
+                          {hostOf(t.url)}
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-1">
-                      <button
-                        type="button"
-                        className="btn-ghost flex-1 !h-7 !text-[11px]"
-                        onClick={async () => {
-                          await restoreSingleTab(t.url)
-                          toast("Opened", "success")
-                        }}
-                      >
-                        Open
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        onClick={async () => {
-                          await deleteTabFromGroup(t.groupId, t.index)
-                          await loadGroups()
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -895,6 +920,9 @@ function AppInner() {
           onCloseOnParkChange={(v) => updatePrefs({ closeOnPark: v })}
           onClose={() => setShowPark(false)}
           onPark={handlePark}
+          onCloseDuplicates={handleCloseDuplicates}
+          onSortBySite={handleSortBySite}
+          dupeCount={dupeCount}
           busy={isParking}
         />
       )}
