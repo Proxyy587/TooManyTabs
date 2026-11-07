@@ -5,16 +5,15 @@ Full-stack Chrome/Edge/Brave extension: local tab groups + cloud sync.
 ## Architecture
 
 ```
-public/background.js   → MV3 service worker (auth, local storage, sync)
-src/App.tsx            → React UI (talks to background via chrome.runtime)
+public/background.js   → MV3 service worker (Chrome Identity auth, sync)
+src/App.tsx            → React UI (chrome.runtime messages)
 server/                → Express + Drizzle + Neon Postgres
 ```
 
-**Data model:** named `tabGroups` in `chrome.storage.local`, mirrored to Postgres (`tab_groups` + `tabs` + `devices`).
+**Auth:** see root **[AUTH.md](../AUTH.md)**.  
+`bun run build` injects root `.env` → `GOOGLE_CLIENT_ID` into `dist/manifest.json`.
 
-**Auth:** `chrome.identity.launchWebAuthFlow` → Google `id_token` → backend verifies → JWT access + refresh token.
-
-**Sync:** on login, every 5 minutes, and on every local change → `POST /sync/push` then `GET /sync/pull` (last-write-wins).
+**Sync:** on login, every 5 minutes, and on local changes → `POST /sync/push` then `GET /sync/pull`.
 
 ---
 
@@ -24,120 +23,119 @@ server/                → Express + Drizzle + Neon Postgres
 cd server
 bun install
 cp .env.example .env
-# edit .env with DATABASE_URL, JWT_SECRET, GOOGLE_CLIENT_ID
-```
-
-Push the schema to Neon (drops old `sessions` table — this is a clean v2 schema):
-
-```bash
+# fill DATABASE_URL, JWT_SECRET
 bun run db:push
-```
-
-Start the API:
-
-```bash
 bun run dev
 ```
 
-Health check: http://localhost:3000/health
+Health: http://localhost:3000/health — Ctrl+C stops the server.
 
 ---
 
-## 2. Google OAuth (fixes "Access blocked / invalid_request")
+## 2. Google OAuth (Chrome Extension client)
 
-TooManyTabs uses **authorization code + PKCE** via `launchWebAuthFlow`, then exchanges the code on your server with `GOOGLE_CLIENT_SECRET`.
+### Why the old setup failed
 
-### Critical bug that was fixed
-The service worker had `process.env.GOOGLE_CLIENT_ID` — that is **always undefined** in Chrome extensions. Client ID is now hardcoded to match `server/.env`.
+| Wrong (what we tried) | Right (Chrome docs) |
+| --------------------- | ------------------- |
+| OAuth type: **Web application** | OAuth type: **Chrome Extension** |
+| Redirect: `http://localhost:3000/...` | No redirect URI — Chrome handles it |
+| `launchWebAuthFlow` / custom browser OAuth | `chrome.identity.getAuthToken({ interactive: true })` |
+| Error 400: `invalid_request` (seguroamigo) | Works when Item ID matches extension ID |
 
-### Setup checklist
+### A. Stable extension ID
 
-1. Google Cloud → Credentials → **Web application** OAuth client
-2. Authorized redirect URIs — add exactly (your extension ID may differ):
-   ```
-   https://<EXTENSION_ID>.chromiumapp.org/
-   ```
-   Find it: load the extension → service worker console → `chrome.identity.getRedirectURL()`
-3. Put the same values everywhere:
-   - `server/.env` → `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`
-   - `public/background.js` → `GOOGLE_CLIENT_ID` constant
-   - `public/manifest.json` → `oauth2.client_id`
-4. Restart API (`cd server && bun run dev`), `bun run build`, reload unpacked extension
+This repo already pins the ID via `manifest.json` → `"key"`.
 
-If WebAuthFlow still fails, Chrome `getAuthToken` is tried as a fallback (needs a Chrome Extension–type client in `manifest.oauth2`).
+**Extension ID:** `najlilhbfkkocnnhfaofffpfehcipahe`
+
+After `bun run build`, load unpacked `dist/` and confirm that ID on `chrome://extensions`.
+
+### B. Create the OAuth client
+
+1. Open [Google Cloud → Credentials](https://console.cloud.google.com/apis/credentials)
+2. Configure the **OAuth consent screen** if prompted (External / Testing is fine; add your Google account as a test user)
+3. **Create Client** → application type: **Chrome Extension**
+4. Name: `TooManyTabs`
+5. **Item ID:** `najlilhbfkkocnnhfaofffpfehcipahe`
+6. Create → copy the **Client ID**  
+   (there is **no** client secret for this type — that is normal)
+
+### C. Put the Client ID in the extension
+
+Edit `public/manifest.json`:
+
+```json
+"oauth2": {
+  "client_id": "PASTE_YOUR_CHROME_EXTENSION_CLIENT_ID.apps.googleusercontent.com",
+  "scopes": [
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile"
+  ]
+}
+```
+
+Optionally set the same ID in `server/.env` as `GOOGLE_CLIENT_ID=` (not required for access-token login, but useful for consistency).
+
+### D. Rebuild & reload
+
+```bash
+bun run build
+```
+
+1. `chrome://extensions` → **Reload** TooManyTabs (or Load unpacked → `dist/`)
+2. Confirm ID is still `najlilhbfkkocnnhfaofffpfehcipahe`
+3. Open TooManyTabs → **Sign in**
+4. Chrome shows the Google account picker → allow → you should be signed in
 
 ---
 
 ## 3. Build & load the extension
 
-From the repo root:
-
 ```bash
-bun install          # or npm install
-bun run build        # or npm run build
+bun install
+bun run build
 ```
 
-Then in Chrome / Edge / Brave:
-
-1. Open `chrome://extensions` (or `edge://extensions`)
-2. Enable **Developer mode**
-3. **Load unpacked** → select the `dist/` folder
-4. Note the extension ID; finish OAuth redirect URI setup above
-5. Reload the extension after updating the Client ID / redirect URI
+1. `chrome://extensions` → Developer mode on  
+2. **Load unpacked** → select `dist/`  
+3. Click the extension icon (or right-click page → Open TooManyTabs)
 
 ---
 
 ## 4. Use it
 
-| Action       | How                                                              |
-| ------------ | ---------------------------------------------------------------- |
-| Open UI      | Click the extension icon, or right-click page → Open TooManyTabs |
-| Save tabs    | "Save Session" (prompts for group name) or context menu          |
-| Sign in      | "Sign in with Google" in the header                              |
-| Sync         | Automatic after login + every 5 min; or click the refresh icon   |
-| Search       | Search bar filters groups + tab titles/URLs                      |
-| Duplicates   | Banner appears when open tabs share the same URL                 |
-| Pin / rename | Icons on each group                                              |
+| Action    | How |
+| --------- | --- |
+| Open UI   | Extension icon / context menu |
+| Save tabs | Save in UI or context menu |
+| Sign in   | Sign in button (Chrome Identity popup) |
+| Sync      | Automatic after login + every 5 min |
 
-Local saves always work offline. Cloud sync runs when you're signed in and the server is reachable.
+Local saves always work offline. Cloud sync needs sign-in + running server.
 
 ---
 
 ## API reference
 
-| Method | Path                | Auth   | Purpose                                        |
-| ------ | ------------------- | ------ | ---------------------------------------------- |
-| POST   | `/auth/google`      | —      | `{ idToken, deviceName?, platform? }` → tokens |
-| POST   | `/auth/refresh`     | —      | `{ refreshToken }` → new access token          |
-| POST   | `/auth/logout`      | Bearer | Revoke current device                          |
-| GET    | `/sync/pull?since=` | Bearer | Incremental group changes                      |
-| POST   | `/sync/push`        | Bearer | Upsert dirty groups (LWW)                      |
-| GET    | `/device`           | Bearer | List devices                                   |
-| DELETE | `/device/:id`       | Bearer | Revoke a device                                |
+| Method | Path | Auth | Purpose |
+| ------ | ---- | ---- | ------- |
+| POST | `/auth/google` | — | `{ accessToken }` from `getAuthToken` → our JWT |
+| POST | `/auth/refresh` | — | Refresh access JWT |
+| POST | `/auth/logout` | Bearer | Revoke device |
+| GET | `/sync/pull?since=` | Bearer | Pull group changes |
+| POST | `/sync/push` | Bearer | Push dirty groups |
+| GET | `/device` | Bearer | List devices |
+| DELETE | `/device/:id` | Bearer | Revoke device |
 
 ---
 
 ## Troubleshooting
 
-**Login fails with redirect / cancelled**
-
-- Redirect URI must exactly match `chrome.identity.getRedirectURL()` (trailing slash matters)
-- Client must be **Web application**, not "Chrome Extension" type alone
-
-**Sync does nothing**
-
-- Confirm you're signed in (email in header)
-- `curl http://localhost:3000/health` — server running?
-- Check service worker console: Extensions → TooManyTabs → "service worker" link
-
-**Schema / DB errors**
-
-```bash
-cd server && bun run db:push
-```
-
-**Old `savedSessions` still in storage**
-
-- Open the extension service worker console and run:
-  `chrome.storage.local.remove(['savedSessions'])`
-- Or clear extension storage from the extension details page
+| Symptom | Fix |
+| ------- | --- |
+| `bad client id` / OAuth error | Client type must be **Chrome Extension**, not Web |
+| `OAuth2 request failed` / Extension ID mismatch | Item ID must be exactly `najlilhbfkkocnnhfaofffpfehcipahe` |
+| `The user did not approve access` | You closed/cancelled the Google popup, or consent failed | Click **Allow** (don’t close). Add your email as a **Test user**. Clear site data / try again |
+| Sign-in from popup closes instantly | Interactive OAuth needs a real tab | Open TooManyTabs via the extension icon (full tab), then Sign in |
+| Extension ID mismatch | Item ID ≠ loaded extension ID | Must be `najlilhbfkkocnnhfaofffpfehcipahe` in Cloud Console |
