@@ -33,11 +33,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((item) => {
           const Icon = item.kind === "success" ? CheckCircle2 : item.kind === "error" ? AlertCircle : Info
           const accent =
-            item.kind === "success" ? "var(--mint)" : item.kind === "error" ? "var(--danger)" : "var(--pop)"
+            item.kind === "success" ? "var(--ok)" : item.kind === "error" ? "var(--danger)" : "var(--pop)"
           return (
             <div
               key={item.id}
-              className="pointer-events-auto rise flex items-start gap-3 rounded-2xl border px-4 py-3"
+              className="pointer-events-auto rise flex items-start gap-3 rounded-sm border px-4 py-3"
               style={{
                 background: "var(--paper-2)",
                 borderColor: "var(--line-2)",

@@ -25,7 +25,7 @@ export function ConfirmDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
-        className="max-w-sm border p-0 sm:rounded-3xl"
+        className="max-w-sm border p-0 sm:rounded-sm"
         style={{
           background: "var(--paper-2)",
           borderColor: "var(--line-2)",
@@ -42,14 +42,14 @@ export function ConfirmDialog({
           <div className="flex gap-2">
             <Button
               variant="outline"
-              className="flex-1 rounded-full border"
+              className="flex-1 rounded-xl border"
               onClick={onClose}
               style={{ borderColor: "var(--line-2)", color: "var(--ink)" }}
             >
               Cancel
             </Button>
             <Button
-              className="flex-1 rounded-full"
+              className="flex-1 rounded-xl"
               onClick={() => {
                 onConfirm()
                 onClose()
