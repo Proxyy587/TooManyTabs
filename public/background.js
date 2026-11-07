@@ -1,10 +1,8 @@
 console.log("[TooManyTabs] background service worker loaded");
 
+// Replaced at build time from root .env → API_BASE_URL
 const API_BASE_URL = "http://localhost:3000";
-// Must match server/.env GOOGLE_CLIENT_ID (Web application client with secret).
-// Do NOT use process.env here — service workers don't have Vite/Node env injection.
-const GOOGLE_CLIENT_ID =
-  "449556864758-gruk9uu3dh8c0g7ir2hmc652kk4gi5l1.apps.googleusercontent.com";
+
 const SYNC_ALARM_NAME = "toomanytabs-periodic-sync";
 const SYNC_INTERVAL_MINUTES = 5;
 
@@ -218,33 +216,32 @@ async function saveSingleTab(tab) {
   }
 }
 
-function base64UrlEncode(bytes) {
-  let binary = "";
-  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  for (let i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function generateCodeVerifier() {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return base64UrlEncode(bytes);
-}
-
-async function generateCodeChallenge(verifier) {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(verifier)
-  );
-  return base64UrlEncode(digest);
-}
-
 function detectPlatform() {
   return navigator.userAgent.includes("Edg/")
     ? "edge"
     : navigator.userAgent.includes("Brave")
       ? "brave"
       : "chrome";
+}
+
+function removeCachedGoogleToken(token) {
+  return new Promise((resolve) => {
+    if (!token) {
+      resolve();
+      return;
+    }
+    chrome.identity.removeCachedAuthToken({ token }, () => resolve());
+  });
+}
+
+function clearAllCachedGoogleTokens() {
+  return new Promise((resolve) => {
+    if (chrome.identity.clearAllCachedAuthTokens) {
+      chrome.identity.clearAllCachedAuthTokens(() => resolve());
+    } else {
+      resolve();
+    }
+  });
 }
 
 async function completeBackendAuth(payload) {
@@ -271,90 +268,35 @@ async function completeBackendAuth(payload) {
     user: data.user,
     deviceId: data.deviceId,
     lastSyncedAt: null,
+    googleAccessToken: payload.accessToken || null,
   });
+  await chrome.storage.local.remove("authLoginError");
 
   fullSync().catch((e) => console.error("[sync] post-login sync failed:", e));
   return data;
 }
 
-// Web application client + PKCE is primary (matches server GOOGLE_CLIENT_ID/SECRET).
-// getAuthToken is a Chrome-only fallback when oauth2.client_id is a Chrome Extension client.
-async function loginWithGoogle() {
-  const redirectUri = chrome.identity.getRedirectURL();
-  const errors = [];
-
-  // Path 1: launchWebAuthFlow + authorization code + PKCE
-  try {
-    if (!GOOGLE_CLIENT_ID) {
-      throw new Error("GOOGLE_CLIENT_ID is not configured in background.js");
-    }
-
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-
-    const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    authUrl.searchParams.set("client_id", GOOGLE_CLIENT_ID);
-    authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set("redirect_uri", redirectUri);
-    authUrl.searchParams.set("scope", "openid email profile");
-    authUrl.searchParams.set("code_challenge", codeChallenge);
-    authUrl.searchParams.set("code_challenge_method", "S256");
-    authUrl.searchParams.set("prompt", "select_account");
-
-    const redirectResult = await chrome.identity.launchWebAuthFlow({
-      url: authUrl.toString(),
-      interactive: true,
-    });
-
-    if (!redirectResult) throw new Error("Login cancelled");
-
-    const resultUrl = new URL(redirectResult);
-    const oauthError = resultUrl.searchParams.get("error");
-    if (oauthError) {
-      throw new Error(`Google: ${oauthError} (${resultUrl.searchParams.get("error_description") || ""})`);
-    }
-
-    const code = resultUrl.searchParams.get("code");
-    if (!code) throw new Error("No authorization code in redirect");
-
-    console.log("[auth] WebAuthFlow code received, exchanging via backend");
-    return await completeBackendAuth({ code, codeVerifier, redirectUri });
-  } catch (err) {
-    console.warn("[auth] WebAuthFlow failed:", err?.message || err);
-    errors.push(`WebAuthFlow: ${err?.message || err}`);
+/**
+ * Completes login after the extension PAGE obtained a Google token via
+ * chrome.identity.getAuthToken (must run in a visible page, not only SW).
+ */
+async function loginWithGoogleAccessToken(accessToken) {
+  if (!accessToken || typeof accessToken !== "string") {
+    throw new Error("Missing Google access token");
   }
-
-  // Path 2: Chrome getAuthToken (needs Chrome Extension OAuth client in manifest.oauth2)
   try {
-    const accessToken = await new Promise((resolve, reject) => {
-      chrome.identity.getAuthToken({ interactive: true }, (token) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        if (!token) {
-          reject(new Error("No access token returned"));
-          return;
-        }
-        resolve(token);
-      });
-    });
-    console.log("[auth] getAuthToken succeeded");
     return await completeBackendAuth({ accessToken });
   } catch (err) {
-    console.warn("[auth] getAuthToken failed:", err?.message || err);
-    errors.push(`getAuthToken: ${err?.message || err}`);
+    await removeCachedGoogleToken(accessToken);
+    throw err;
   }
-
-  throw new Error(
-    `Google sign-in failed.\n\n${errors.join("\n")}\n\n` +
-      `Add this redirect URI to your Web OAuth client:\n${redirectUri}\n` +
-      `Client ID must match server/.env and background.js.`
-  );
 }
 
 async function logout() {
-  const { authToken } = await chrome.storage.local.get("authToken");
+  const { authToken, googleAccessToken } = await chrome.storage.local.get([
+    "authToken",
+    "googleAccessToken",
+  ]);
   if (authToken) {
     try {
       await fetch(`${API_BASE_URL}/auth/logout`, {
@@ -366,12 +308,18 @@ async function logout() {
       });
     } catch (_) {}
   }
+
+  await clearAllCachedGoogleTokens();
+  if (googleAccessToken) await removeCachedGoogleToken(googleAccessToken);
+
   await chrome.storage.local.remove([
     "authToken",
     "refreshToken",
     "user",
     "deviceId",
     "lastSyncedAt",
+    "googleAccessToken",
+    "authLoginError",
   ]);
 }
 
@@ -537,15 +485,27 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   const { action } = request;
 
   if (action === "googleLogin") {
-    loginWithGoogle()
+    // Prefer accessToken from the extension page (Chrome tutorial pattern).
+    // Falling back to SW getAuthToken is less reliable for interactive consent.
+    const run = async () => {
+      if (request.accessToken) {
+        return loginWithGoogleAccessToken(request.accessToken);
+      }
+      throw new Error(
+        "Sign-in must start from the TooManyTabs tab (chrome.identity.getAuthToken)."
+      );
+    };
+    run()
       .then((data) => sendResponse({ success: true, data }))
       .catch((err) => sendResponse({ success: false, error: err.message }));
     return true;
   }
 
-  if (action === "getRedirectUri") {
-    sendResponse({ redirectUri: chrome.identity.getRedirectURL() });
-    return false;
+  if (action === "clearGoogleAuthCache") {
+    clearAllCachedGoogleTokens()
+      .then(() => sendResponse({ success: true }))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
   }
 
   if (action === "logout") {

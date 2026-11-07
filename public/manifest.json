@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "TooManyTabs",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A cozy shelf for your tabs — save, group, and sync across devices",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqtMN6HdsJdPM7TZ+BNu2YzMEumtfgK49o+rkLwrUceA7rAUUkkQZi4+aEcpb3QtIJy6l3/0l65L5I4XO/o2n5/qgy/GbSu9MpFxTRMeqNDHd2ExDh5jb2muVr8A56txn03PeqtQ+oMYExWu7B+83zTnceN8Fo4aFOQogq777QgofdVdmybwVTABCssBwh3irdk515A88m/mlnJmhnopBSK311o3zH3l224PyfceTMM8XcPCcelFGZfuITjgADNAHg7E6a1P+Cs9L/gpVDHdKJ82E/LODB0712P6EWRcQBuJCtRs2X0RZ/P1D75+k2mX+0ScWnnbd8LrioqahBE1eRQIDAQAB",
   "permissions": [
     "tabs",
     "storage",
@@ -13,7 +14,8 @@
   "host_permissions": [
     "http://localhost:3000/*",
     "http://127.0.0.1:3000/*",
-    "https://*/*"
+    "https://www.googleapis.com/*",
+    "https://accounts.google.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -24,11 +26,10 @@
     "128": "icon.svg"
   },
   "oauth2": {
-    "client_id": "449556864758-gruk9uu3dh8c0g7ir2hmc652kk4gi5l1.apps.googleusercontent.com",
+    "client_id": "INJECTED_FROM_ENV_AT_BUILD.apps.googleusercontent.com",
     "scopes": [
-      "openid",
-      "email",
-      "profile"
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile"
     ]
   },
   "action": {
