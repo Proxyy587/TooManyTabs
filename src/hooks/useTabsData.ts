@@ -76,8 +76,8 @@ export function useTabsData() {
   }, [])
 
   const items: Item[] = useMemo(
-    () => buildItems({ tabs, groups, bookmarks: [], rules: prefs.categoryRules, staleDays: prefs.staleDays, now }),
-    [tabs, groups, prefs.categoryRules, prefs.staleDays, now]
+    () => buildItems({ tabs, groups, bookmarks: [], rules: prefs.categoryRules, custom: prefs.customCategories, staleDays: prefs.staleDays, now }),
+    [tabs, groups, prefs.categoryRules, prefs.customCategories, prefs.staleDays, now]
   )
 
   return { ready, items, tabs, groups, prefs, updatePrefs, user, sync, now, reloadTabs }

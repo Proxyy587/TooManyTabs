@@ -3,7 +3,7 @@
  * bookmarks. Filters work on this list, so every filter combines with every
  * other one.
  */
-import { classify, hostOf, type CategoryId, type CategoryRules } from "./categories"
+import { CATEGORIES, classify, hostOf, type CategoryKey, type CategoryRules, type CustomCategory } from "./categories"
 
 export type Source = "open" | "saved" | "bookmark"
 export const SOURCES: { id: Source; label: string }[] = [
@@ -19,7 +19,7 @@ export type Item = {
   title: string
   favIconUrl?: string | null
   host: string
-  category: CategoryId
+  category: CategoryKey
   categoryVia: string
   norm: string
   // open tabs
@@ -101,13 +101,15 @@ export function buildItems(input: {
   groups: RawGroup[]
   bookmarks: RawBookmark[]
   rules: CategoryRules
+  custom?: CustomCategory[]
   staleDays: number
   now: number
 }): Item[] {
   const { rules, now } = input
+  const custom = input.custom ?? []
   const items: Item[] = []
   const base = (url: string, title: string) => {
-    const c = classify(url, title, rules)
+    const c = classify(url, title, rules, custom)
     return { url, title: title || hostOf(url) || url, host: hostOf(url), category: c.category, categoryVia: c.via, norm: normalizeUrl(url) }
   }
 
@@ -170,12 +172,12 @@ export type Flag = "dupes" | "stale" | "kept"
 export const FLAGS: { id: Flag; label: string; hint: string }[] = [
   { id: "dupes", label: "Twins", hint: "Open tabs with the same page open more than once" },
   { id: "stale", label: "Dusty", hint: "Open tabs you haven't looked at in a while" },
-  { id: "kept", label: "Already kept", hint: "Open tabs that are also saved or bookmarked, so they're safe to close" },
+  { id: "kept", label: "Safe to close", hint: "Open tabs that are also saved or bookmarked, so they're safe to close" },
 ]
 
 export type Filters = {
   sources: Source[]
-  categories: CategoryId[]
+  categories: CategoryKey[]
   flags: Flag[]
   shelf: string | null
   query: string
@@ -246,8 +248,8 @@ export function facetCounts(items: Item[], f: Filters) {
 const SOURCE_ORDER: Record<Source, number> = { open: 0, saved: 1, bookmark: 2 }
 
 /** Group into category sections, biggest first; inside, open → saved → bookmarks. */
-export function groupByCategory(items: Item[], order: CategoryId[]): { category: CategoryId; items: Item[] }[] {
-  const by = new Map<CategoryId, Item[]>()
+export function groupByCategory(items: Item[], order: CategoryKey[]): { category: CategoryKey; items: Item[] }[] {
+  const by = new Map<CategoryKey, Item[]>()
   for (const it of items) {
     const list = by.get(it.category)
     if (list) list.push(it)
@@ -302,4 +304,43 @@ export function relativeAge(ts: number | undefined, now: number): string {
   const days = Math.floor(h / 24)
   if (days < 30) return `${days}d`
   return `${Math.floor(days / 30)}mo`
+}
+
+// ---------------------------------------------------------------- smart categories
+
+export type SmartCategory = { id: CategoryKey; label: string; custom: boolean; hosts: number; total: number }
+
+/**
+ * The categories worth showing as filters. A built-in category needs at least
+ * two different sites, because a "category" with one site in it is just that
+ * site and the search box already finds it. Your own categories always show.
+ * Biggest first; "Other" never shows.
+ */
+export function smartCategories(items: Item[], custom: CustomCategory[] = [], minHosts = 2): SmartCategory[] {
+  const hosts = new Map<CategoryKey, Set<string>>()
+  const total = new Map<CategoryKey, number>()
+  for (const it of items) {
+    if (!hosts.has(it.category)) hosts.set(it.category, new Set())
+    hosts.get(it.category)!.add(it.host)
+    total.set(it.category, (total.get(it.category) || 0) + 1)
+  }
+  const out: SmartCategory[] = []
+  for (const c of custom) out.push({ id: c.id, label: c.label, custom: true, hosts: hosts.get(c.id)?.size || 0, total: total.get(c.id) || 0 })
+  for (const c of CATEGORIES) {
+    if (c.id === "other") continue
+    const h = hosts.get(c.id)?.size || 0
+    if (h >= minHosts) out.push({ id: c.id, label: c.label, custom: false, hosts: h, total: total.get(c.id) || 0 })
+  }
+  return out.sort((a, b) => Number(b.custom) - Number(a.custom) || b.total - a.total || a.label.localeCompare(b.label))
+}
+
+/** Open tabs that are already saved or bookmarked: closing them loses nothing. */
+export function keptTabsToClose(items: Item[]): number[] {
+  return items.filter((i) => i.source === "open" && i.kept && !i.pinned && !i.active && i.tabId != null).map((i) => i.tabId!)
+}
+
+/** A shelf as a Markdown list, for pasting into notes or a message. */
+export function shelfToMarkdown(name: string, items: { title: string; url: string }[]): string {
+  const esc = (t: string) => t.replace(/[[\]]/g, "\\$&")
+  return `## ${name}\n\n${items.map((i) => `- [${esc(i.title)}](${i.url})`).join("\n")}\n`
 }

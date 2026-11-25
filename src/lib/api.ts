@@ -6,7 +6,7 @@
  * soft-deleted tombstones, so deletes survive until the sync server has
  * accepted them. Writes are serialised so two quick clicks can't race.
  */
-import { isCategoryId, type CategoryRules } from "./categories"
+import { isCategoryId, isCustomId, sanitizeCustom, type CategoryKey, type CategoryRules, type CustomCategory } from "./categories"
 import {
   obtainGoogleCredential,
   revokeCachedGoogleToken,
@@ -55,6 +55,10 @@ export interface AppPrefs {
   staleDays: number
   /** host → category overrides made by the user */
   categoryRules: CategoryRules
+  /** categories the user made */
+  customCategories: CustomCategory[]
+  /** the side panel with what needs attention and where your tabs go (wide screens) */
+  insights: boolean
 }
 
 export const DEFAULT_PREFS: AppPrefs = {
@@ -65,9 +69,11 @@ export const DEFAULT_PREFS: AppPrefs = {
   onboardingDismissed: false,
   staleDays: 3,
   categoryRules: {},
+  customCategories: [],
+  insights: true,
 }
 
-export const PREF_KEYS = ["themeMode", "palette", "density", "closeOnPark", "onboardingDismissed", "staleDays", "categoryRules"] as const
+export const PREF_KEYS = ["themeMode", "palette", "density", "closeOnPark", "onboardingDismissed", "staleDays", "categoryRules", "customCategories", "insights"] as const
 
 function now(): string {
   return new Date().toISOString()
@@ -327,6 +333,7 @@ export async function exportGroupsJson(): Promise<string> {
         updatedAt: g.updatedAt,
       })),
       categoryRules: prefs.categoryRules,
+      customCategories: prefs.customCategories,
     },
     null,
     2
@@ -335,7 +342,7 @@ export async function exportGroupsJson(): Promise<string> {
 
 /** Merge a backup into local data (never deletes anything). Returns the number of shelves read. */
 export async function importGroupsJson(json: string): Promise<number> {
-  let parsed: { tabGroups?: unknown; categoryRules?: unknown }
+  let parsed: { tabGroups?: unknown; categoryRules?: unknown; customCategories?: unknown }
   try {
     parsed = JSON.parse(json)
   } catch {
@@ -369,25 +376,48 @@ export async function importGroupsJson(json: string): Promise<number> {
   })
   if (parsed.categoryRules && typeof parsed.categoryRules === "object") {
     const prefs = await getPrefs()
-    await setPrefs({ categoryRules: { ...sanitizeRules(parsed.categoryRules), ...prefs.categoryRules } })
+    const custom = [...prefs.customCategories]
+    for (const c of sanitizeCustom(parsed.customCategories)) if (!custom.some((x) => x.id === c.id)) custom.push(c)
+    await setPrefs({
+      customCategories: sanitizeCustom(custom),
+      categoryRules: { ...sanitizeRules(parsed.categoryRules, custom), ...prefs.categoryRules },
+    })
   }
   return incoming.length
 }
 
 // ------------------------------------------------------------------ prefs
 
-export function sanitizeRules(raw: unknown): CategoryRules {
+export function sanitizeRules(raw: unknown, custom: CustomCategory[] = []): CategoryRules {
   const out: CategoryRules = {}
   if (!raw || typeof raw !== "object") return out
   for (const [host, cat] of Object.entries(raw as Record<string, unknown>)) {
-    if (/^[a-z0-9.-]+$/i.test(host) && isCategoryId(cat)) out[host.toLowerCase()] = cat
+    if (!/^[a-z0-9.-]+$/i.test(host)) continue
+    if (isCategoryId(cat) || (isCustomId(cat) && custom.some((c) => c.id === cat))) out[host.toLowerCase()] = cat
   }
   return out
+}
+
+/** "Always file this site under …". Pass null to forget the rule. */
+export async function setCategoryRule(host: string, category: CategoryKey | null): Promise<void> {
+  const prefs = await getPrefs()
+  const rules = { ...prefs.categoryRules }
+  if (category) rules[host] = category
+  else delete rules[host]
+  await setPrefs({ categoryRules: rules })
+}
+
+/** Replace the user's categories; rules that pointed at a removed one are dropped. */
+export async function saveCustomCategories(list: CustomCategory[]): Promise<void> {
+  const prefs = await getPrefs()
+  const custom = sanitizeCustom(list)
+  await setPrefs({ customCategories: custom, categoryRules: sanitizeRules(prefs.categoryRules, custom) })
 }
 
 export async function getPrefs(): Promise<AppPrefs> {
   const raw = await storageGet<Record<string, unknown>>([...PREF_KEYS])
   const staleDays = Number(raw.staleDays)
+  const customCategories = sanitizeCustom(raw.customCategories)
   return {
     themeMode: raw.themeMode === "dark" || raw.themeMode === "light" ? raw.themeMode : "system",
     palette: PALETTE_IDS.find((id) => id === raw.palette) ?? DEFAULT_PREFS.palette,
@@ -395,7 +425,9 @@ export async function getPrefs(): Promise<AppPrefs> {
     closeOnPark: raw.closeOnPark === true,
     onboardingDismissed: raw.onboardingDismissed === true,
     staleDays: [1, 3, 7, 14].includes(staleDays) ? staleDays : DEFAULT_PREFS.staleDays,
-    categoryRules: sanitizeRules(raw.categoryRules),
+    categoryRules: sanitizeRules(raw.categoryRules, customCategories),
+    customCategories,
+    insights: raw.insights !== false,
   }
 }
 
