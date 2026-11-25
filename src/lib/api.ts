@@ -1,3 +1,11 @@
+import {
+  obtainGoogleCredential,
+  revokeCachedGoogleToken,
+  type AuthUser,
+  type LoginResult,
+} from "./auth";
+export type { AuthUser } from "./auth";
+
 export interface TabData {
   url: string;
   title: string;
@@ -39,12 +47,6 @@ export const DEFAULT_PREFS: AppPrefs = {
   onboardingDismissed: false,
 };
 
-export interface AuthUser {
-  id: number;
-  email: string;
-  name?: string;
-  picture?: string;
-}
 
 function storageGet<T extends Record<string, unknown>>(
   keys: string[]
@@ -249,85 +251,17 @@ async function writeGroups(groups: TabGroup[]): Promise<void> {
   sendMessage({ action: "pushDirty" }).catch(() => {});
 }
 
-function explainGoogleAuthError(raw: string): Error {
-  const msg = raw || "Google sign-in failed";
-
-  if (/access.?blocked|bad client|invalid_client|invalid.?request|OAuth2 request failed|Authorization page could not be loaded/i.test(msg)) {
-    return new Error(
-      "Google Access blocked — use a Chrome Extension OAuth client (not Web). " +
-        "In Google Cloud → Credentials → Create OAuth client → Application type: Chrome Extension, " +
-        `Item ID: ${chrome.runtime.id}. Put that Client ID in .env (no secret), then bun run build and reload dist/. ` +
-        "Also add your Gmail as a Test user. Details: AUTH.md"
-    );
-  }
-
-  if (/did not approve/i.test(msg)) {
-    return new Error(
-      "Google access was not approved. In the Google popup click Allow — don’t close it. " +
-        "If the app is in Testing mode, add your Gmail under OAuth consent screen → Test users. " +
-        `Extension ID must be ${chrome.runtime.id}.`
-    );
-  }
-
-  if (/Custom URI scheme is not supported/i.test(msg)) {
-    return new Error(
-      "This browser blocks Chrome Identity Google login (common in Brave). Use Google Chrome."
-    );
-  }
-
-  return new Error(msg);
-}
-
-function getGoogleAccessTokenFromPage(interactive = true): Promise<string> {
-  return new Promise((resolve, reject) => {
-    chrome.identity.getAuthToken({ interactive }, (result) => {
-      if (chrome.runtime.lastError || !result) {
-        reject(explainGoogleAuthError(chrome.runtime.lastError?.message || "Google sign-in failed"));
-        return;
-      }
-      const token = typeof result === "string" ? result : result.token;
-      if (!token) {
-        reject(new Error("Google did not return an access token"));
-        return;
-      }
-      resolve(token);
-    });
-  });
-}
-
-export async function googleLogin(): Promise<{
-  token: string;
-  refreshToken: string;
-  deviceId: string;
-  user: AuthUser;
-}> {
-  // Official Chrome pattern: getAuthToken in the extension page, then hand token to backend
-  let accessToken: string;
-  try {
-    accessToken = await getGoogleAccessTokenFromPage(true);
-  } catch (firstErr) {
-    // One retry after clearing a stale/denied cache
-    await sendMessage({ action: "clearGoogleAuthCache" }).catch(() => {});
-    try {
-      accessToken = await getGoogleAccessTokenFromPage(true);
-    } catch {
-      throw firstErr instanceof Error ? firstErr : new Error("Google sign-in failed");
-    }
-  }
-
+export async function googleLogin(): Promise<LoginResult> {
+  const credential = await obtainGoogleCredential();
   const response = await sendMessage<{
     success: boolean;
-    data?: {
-      token: string;
-      refreshToken: string;
-      deviceId: string;
-      user: AuthUser;
-    };
+    data?: LoginResult;
     error?: string;
-  }>({ action: "googleLogin", accessToken });
+  }>({ action: "googleLogin", ...credential });
 
   if (!response?.success || !response.data) {
-    throw new Error(response?.error || "Login failed");
+    if ("accessToken" in credential) await revokeCachedGoogleToken(credential.accessToken);
+    throw new Error(response?.error || "Sign-in failed on the sync server.");
   }
   return response.data;
 }

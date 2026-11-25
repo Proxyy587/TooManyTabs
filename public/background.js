@@ -244,21 +244,45 @@ function clearAllCachedGoogleTokens() {
   });
 }
 
+async function recordSyncError(err) {
+  const message = err && err.message ? err.message : String(err);
+  console.error("[sync]", message);
+  try {
+    await chrome.storage.local.set({ lastSyncError: message });
+  } catch (_) {}
+}
+
+function describeFetchFailure(err) {
+  return new Error(
+    `Can't reach the sync server at ${API_BASE_URL}. Start it with "npm run server" ` +
+      `(or check API_BASE_URL). Your tabs stay safe on this device. (${err && err.message ? err.message : err})`
+  );
+}
+
 async function completeBackendAuth(payload) {
   const platform = detectPlatform();
-  const res = await fetch(`${API_BASE_URL}/auth/google`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...payload,
-      deviceName: `${platform} on ${navigator.platform}`,
-      platform,
-    }),
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE_URL}/auth/google`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...payload,
+        deviceName: `${platform} on ${navigator.platform}`,
+        platform,
+      }),
+    });
+  } catch (err) {
+    throw describeFetchFailure(err);
+  }
 
   if (!res.ok) {
-    const errText = await res.text().catch(() => "Unknown error");
-    throw new Error(`Backend authentication failed: ${errText}`);
+    let message = "";
+    try {
+      const body = await res.json();
+      message = body && body.message ? body.message : "";
+    } catch (_) {}
+    throw new Error(`Sync server refused sign-in (${res.status}): ${message || res.statusText}`);
   }
 
   const data = await res.json();
@@ -268,28 +292,41 @@ async function completeBackendAuth(payload) {
     user: data.user,
     deviceId: data.deviceId,
     lastSyncedAt: null,
+    lastSyncError: null,
     googleAccessToken: payload.accessToken || null,
   });
   await chrome.storage.local.remove("authLoginError");
 
-  fullSync().catch((e) => console.error("[sync] post-login sync failed:", e));
+  fullSync().catch((e) => recordSyncError(e));
   return data;
 }
 
 /**
- * Completes login after the extension PAGE obtained a Google token via
- * chrome.identity.getAuthToken (must run in a visible page, not only SW).
+ * Completes login after the extension PAGE obtained proof of identity:
+ *  - { accessToken } from chrome.identity.getAuthToken (Chrome Extension client), or
+ *  - { code, codeVerifier, redirectUri } from launchWebAuthFlow (Web client, PKCE).
  */
-async function loginWithGoogleAccessToken(accessToken) {
-  if (!accessToken || typeof accessToken !== "string") {
-    throw new Error("Missing Google access token");
+async function loginWithGoogleCredential(request) {
+  if (typeof request.accessToken === "string" && request.accessToken) {
+    try {
+      return await completeBackendAuth({ accessToken: request.accessToken });
+    } catch (err) {
+      await removeCachedGoogleToken(request.accessToken);
+      throw err;
+    }
   }
-  try {
-    return await completeBackendAuth({ accessToken });
-  } catch (err) {
-    await removeCachedGoogleToken(accessToken);
-    throw err;
+  if (
+    typeof request.code === "string" &&
+    typeof request.codeVerifier === "string" &&
+    typeof request.redirectUri === "string"
+  ) {
+    return completeBackendAuth({
+      code: request.code,
+      codeVerifier: request.codeVerifier,
+      redirectUri: request.redirectUri,
+    });
   }
+  throw new Error("Sign-in must start from the TooManyTabs page.");
 }
 
 async function logout() {
@@ -485,17 +522,7 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   const { action } = request;
 
   if (action === "googleLogin") {
-    // Prefer accessToken from the extension page (Chrome tutorial pattern).
-    // Falling back to SW getAuthToken is less reliable for interactive consent.
-    const run = async () => {
-      if (request.accessToken) {
-        return loginWithGoogleAccessToken(request.accessToken);
-      }
-      throw new Error(
-        "Sign-in must start from the TooManyTabs tab (chrome.identity.getAuthToken)."
-      );
-    };
-    run()
+    loginWithGoogleCredential(request)
       .then((data) => sendResponse({ success: true, data }))
       .catch((err) => sendResponse({ success: false, error: err.message }));
     return true;
