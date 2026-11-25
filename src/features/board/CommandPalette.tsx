@@ -8,6 +8,8 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command"
+import { PALETTE_IDS, type PaletteId } from "@/lib/api"
+import { PALETTES } from "@/lib/palettes"
 import type { Item } from "@/lib/items"
 import { Favicon } from "./Favicon"
 
@@ -33,6 +35,8 @@ export function CommandPalette({
   onSettings,
   onShortcuts,
   onToggleTheme,
+  palette,
+  onPalette,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
@@ -45,6 +49,8 @@ export function CommandPalette({
   onSettings: () => void
   onShortcuts: () => void
   onToggleTheme: () => void
+  palette: PaletteId
+  onPalette: (id: PaletteId) => void
 }) {
   const run = (fn: () => void) => () => {
     onOpenChange(false)
@@ -83,6 +89,18 @@ export function CommandPalette({
           <CommandItem onSelect={run(onShortcuts)}>
             <Keyboard /> Keyboard shortcuts <CommandShortcut>?</CommandShortcut>
           </CommandItem>
+        </CommandGroup>
+        <CommandGroup heading="Theme">
+          {PALETTE_IDS.filter((id) => id !== palette).map((id) => (
+            <CommandItem key={id} value={`theme ${PALETTES[id].name} ${PALETTES[id].blurb}`} onSelect={run(() => onPalette(id))}>
+              <span className="pix-s grid size-4 grid-cols-2 overflow-hidden" style={{ "--pc": PALETTES[id].light.raised2 } as React.CSSProperties} aria-hidden>
+                <span style={{ background: PALETTES[id].light.ground }} />
+                <span style={{ background: PALETTES[id].light.brand }} />
+              </span>
+              Theme: {PALETTES[id].name}
+              <span className="ml-auto text-xs text-ink-3">{PALETTES[id].blurb}</span>
+            </CommandItem>
+          ))}
         </CommandGroup>
         {openTabs.length ? (
           <CommandGroup heading="Open now">

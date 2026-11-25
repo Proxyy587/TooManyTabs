@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   DEFAULT_PREFS,
+  PREF_KEYS,
   getAuthState,
   getPrefs,
   getSyncMeta,
@@ -54,7 +55,7 @@ export function useTabsData() {
       }
       if (changes.authToken || changes.user) getAuthState().then((a) => alive && setUser(a.user))
       if (changes.lastSyncedAt || changes.lastSyncError) getSyncMeta().then((s) => alive && setSync(s))
-      if (["themeMode", "closeOnPark", "staleDays", "categoryRules", "onboardingDismissed"].some((k) => k in changes)) {
+      if (PREF_KEYS.some((k) => k in changes)) {
         getPrefs().then((p) => alive && setPrefsState(p))
       }
     }

@@ -36,7 +36,7 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "press flex w-fit min-w-0 items-center justify-between gap-2 rounded-full bg-raised px-3.5 text-sm font-semibold whitespace-nowrap text-ink outline-none hover:bg-raised-2 disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-ink-3 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-ink-3",
+        "press pix-s pix-btn [--pc:var(--raised-2)] [--btn-edge:var(--edge)] flex w-fit min-w-0 cursor-pointer items-center justify-between gap-2 px-3.5 text-sm font-semibold whitespace-nowrap text-ink outline-none hover:[--pc:color-mix(in_oklab,var(--raised-2)_86%,var(--ink))] disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-ink-3 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-ink-3",
         className
       )}
       {...props}
@@ -61,7 +61,7 @@ function SelectContent({
       <SelectPrimitive.Content
         data-slot="select-content"
         className={cn(
-          "relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-xl bg-popover menu-motion text-popover-foreground shadow-[var(--shadow-float)]",
+          "relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) pix-m pix-float [--pc:var(--float)] overflow-x-hidden overflow-y-auto menu-motion text-popover-foreground",
           position === "popper" &&
             "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
           className
@@ -108,7 +108,7 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        "pix-s [--pc:transparent] relative flex w-full cursor-default items-center gap-2 py-2 pr-8 pl-2.5 text-sm outline-hidden select-none focus:[--pc:var(--pick)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className
       )}
       {...props}
@@ -133,7 +133,7 @@ function SelectSeparator({
   return (
     <SelectPrimitive.Separator
       data-slot="select-separator"
-      className={cn("pointer-events-none -mx-1 my-1 h-px bg-border", className)}
+      className={cn("pointer-events-none -mx-1 my-1 h-0.5 bg-[var(--line)]", className)}
       {...props}
     />
   )

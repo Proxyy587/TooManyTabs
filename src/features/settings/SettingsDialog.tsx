@@ -1,26 +1,32 @@
 import { useRef, useState } from "react"
 import { toast } from "sonner"
-import { Copy, Download, LogOut, RefreshCw, Upload } from "lucide-react"
+import { Check, Copy, Download, LogOut, Monitor, Moon, RefreshCw, Sun, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Pip } from "@/components/brand/Pip"
+import { Sprite, type SpriteName } from "@/components/brand/Sprite"
+import { PALETTES } from "@/lib/palettes"
+import { cn } from "@/lib/utils"
 import {
   exportGroupsJson,
   googleLogin,
   importGroupsJson,
   logout,
   manualSync,
+  PALETTE_IDS,
   type AppPrefs,
   type AuthUser,
+  type Density,
+  type PaletteId,
   type ThemeMode,
 } from "@/lib/api"
 import { authAvailability } from "@/lib/auth"
 import type { SyncInfo } from "@/hooks/useTabsData"
 
-export type SettingsTab = "general" | "sync" | "data" | "keys" | "about"
+export type SettingsTab = "look" | "general" | "sync" | "data" | "keys" | "about"
 
 const SHORTCUTS: [string, string][] = [
   ["⌘K / Ctrl K", "Command menu: jump to any tab or run an action"],
@@ -31,19 +37,80 @@ const SHORTCUTS: [string, string][] = [
   ["⌫ / Delete", "Close the tab, or remove it from its shelf"],
   ["Esc", "Clear search, close menus"],
   ["?", "This list"],
+  ["⌘K → theme", "Switch light or dark from the command menu"],
   ["Alt Shift K", "Open TooManyTabs from anywhere (browser shortcut)"],
   ["Alt Shift S", "Save the current tab to Later from anywhere"],
 ]
 
+const PANES: { id: SettingsTab; label: string; icon: SpriteName; title: string; blurb: string }[] = [
+  { id: "look", label: "Look", icon: "navSpark", title: "look", blurb: "Pick a theme and how busy the page feels." },
+  { id: "general", label: "Tabs", icon: "navOpen", title: "tabs", blurb: "How saving and snoozing behave." },
+  { id: "sync", label: "Sync", icon: "navMoon", title: "sync", blurb: "Keep your shelves in step between browsers." },
+  { id: "data", label: "Backup", icon: "navStack", title: "backup", blurb: "Your shelves are yours. Take a copy any time." },
+  { id: "keys", label: "Shortcuts", icon: "navCmd", title: "shortcuts", blurb: "Everything you can do without the mouse." },
+  { id: "about", label: "About", icon: "navHeart", title: "about", blurb: "" },
+]
+
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl bg-raised px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+    <div className="pix-s [--pc:var(--raised)] mx-0.5 flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="text-[15px] font-medium text-ink">{label}</p>
-        {hint ? <p className="mt-0.5 text-[13px] text-ink-3">{hint}</p> : null}
+        {hint ? <p className="mt-0.5 text-[13px] text-ink-2">{hint}</p> : null}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
+  )
+}
+
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="grid gap-3">
+      <h3 className="font-display text-[15px] text-ink-2">{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+/** A tiny pixel window in a palette's own colours, so you see the theme before you pick it. */
+function ThemeCard({ id, dark, active, onPick }: { id: PaletteId; dark: boolean; active: boolean; onPick: () => void }) {
+  const sw = PALETTES[id][dark ? "dark" : "light"]
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      aria-pressed={active}
+      aria-label={`${PALETTES[id].name}, ${PALETTES[id].blurb}`}
+      className={cn(
+        "press pix [--px:3px] cursor-pointer p-1 text-left outline-none",
+        active ? "[--pc:var(--ink)]" : "[--pc:var(--raised)] hover:[--pc:var(--raised-2)]"
+      )}
+    >
+      <span className="pix-s block p-2" style={{ "--pc": sw.ground } as React.CSSProperties}>
+        <span className="mb-1.5 flex items-center gap-1" aria-hidden>
+          <span className="size-1.5" style={{ background: sw.ink }} />
+          <span className="size-1.5" style={{ background: sw.brand }} />
+          <span className="h-1.5 flex-1" style={{ background: sw.raised }} />
+        </span>
+        <span className="grid gap-1" aria-hidden>
+          <span className="flex items-center gap-1.5 p-1" style={{ background: sw.raised }}>
+            <span className="size-2.5" style={{ background: sw.brand }} />
+            <span className="h-1.5 w-3/5" style={{ background: sw.ink }} />
+          </span>
+          <span className="flex items-center gap-1.5 p-1" style={{ background: sw.raised2 }}>
+            <span className="size-2.5" style={{ background: sw.raised }} />
+            <span className="h-1.5 w-2/5" style={{ background: sw.ink, opacity: 0.6 }} />
+          </span>
+        </span>
+      </span>
+      <span className={cn("flex items-center justify-between gap-2 px-2 pt-2 pb-1.5", active ? "text-primary-foreground" : "text-ink")}>
+        <span className="min-w-0">
+          <span className="block truncate text-[14px] leading-tight font-semibold">{PALETTES[id].name}</span>
+          <span className={cn("block truncate text-[12px] leading-tight", active ? "text-primary-foreground/70" : "text-ink-3")}>{PALETTES[id].blurb}</span>
+        </span>
+        {active ? <Check className="size-4 shrink-0" strokeWidth={3} /> : null}
+      </span>
+    </button>
   )
 }
 
@@ -56,6 +123,7 @@ export function SettingsDialog({
   onPrefs,
   user,
   sync,
+  dark,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
@@ -65,6 +133,7 @@ export function SettingsDialog({
   onPrefs: (patch: Partial<AppPrefs>) => void
   user: AuthUser | null
   sync: SyncInfo
+  dark: boolean
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState<null | "login" | "sync">(null)
@@ -127,42 +196,96 @@ export function SettingsDialog({
     }
   }
 
+  const pane = PANES.find((p) => p.id === tab) ?? PANES[0]
+  const track = "[--pc:var(--raised-2)]"
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex flex-col gap-0 overflow-hidden p-0 sm:p-0 max-sm:inset-0 max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none sm:max-h-[min(640px,88dvh)] sm:min-h-[420px] sm:max-w-2xl"
+        showCloseButton
+        className="flex flex-col gap-0 overflow-hidden p-0 sm:p-0 max-sm:inset-0 max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 sm:h-[min(640px,88dvh)] sm:max-w-3xl"
       >
-        <DialogHeader className="px-5 pt-5 pb-4 text-left sm:px-6 sm:pt-6">
+        <DialogHeader className="sr-only">
           <DialogTitle>Settings</DialogTitle>
-          <DialogDescription className="sr-only">Preferences, sync, backups and shortcuts</DialogDescription>
+          <DialogDescription>Theme, tabs, sync, backups and shortcuts</DialogDescription>
         </DialogHeader>
-        <Tabs value={tab} onValueChange={(v) => onTabChange(v as SettingsTab)} className="min-h-0 flex-1 gap-0">
-          <div className="px-5 sm:px-6">
-            <TabsList aria-label="Settings sections">
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="sync">Sync</TabsTrigger>
-              <TabsTrigger value="data">Backup</TabsTrigger>
-              <TabsTrigger value="keys">Shortcuts</TabsTrigger>
-              <TabsTrigger value="about">About</TabsTrigger>
+        <Tabs
+          value={tab}
+          orientation="vertical"
+          onValueChange={(v) => onTabChange(v as SettingsTab)}
+          className="min-h-0 flex-1 gap-0 max-sm:gap-0 sm:grid sm:grid-cols-[196px_minmax(0,1fr)]"
+        >
+          <div className="flex min-w-0 flex-col gap-4 px-4 pt-4 pb-2 max-sm:pr-14 sm:px-5 sm:pt-6 sm:pb-6">
+            <p className="hidden px-3 font-display text-[22px] leading-none text-ink sm:block">settings</p>
+            <TabsList
+              aria-label="Settings sections"
+              className="sm:w-full sm:flex-col sm:items-stretch sm:gap-1 sm:overflow-visible sm:p-0 sm:[--pc:transparent]"
+            >
+              {PANES.map((p) => (
+                <TabsTrigger
+                  key={p.id}
+                  value={p.id}
+                  className="sm:h-10 sm:flex-none sm:justify-start sm:gap-3 sm:px-3 sm:text-[15px] sm:data-[state=active]:[--pc:var(--brand)] sm:data-[state=active]:text-on-brand"
+                >
+                  <Sprite name={p.icon} scale={2} className="max-sm:hidden" />
+                  {p.label}
+                </TabsTrigger>
+              ))}
             </TabsList>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-5 pb-8 sm:px-6">
-            <TabsContent value="general" className="grid gap-2">
-              <Field label="Appearance">
-                <Tabs value={prefs.themeMode} onValueChange={(v) => onPrefs({ themeMode: v as ThemeMode })}>
-                  <TabsList aria-label="Appearance" className="bg-raised-2">
-                    <TabsTrigger value="system">System</TabsTrigger>
-                    <TabsTrigger value="light">Light</TabsTrigger>
-                    <TabsTrigger value="dark">Dark</TabsTrigger>
+          <div className="min-h-0 overflow-y-auto px-5 pt-3 pb-8 sm:px-8 sm:pt-7 sm:pr-10">
+            <header className="mb-6">
+              <h2 className="px-title text-[34px] leading-none font-semibold text-ink">{pane.title}</h2>
+              {pane.blurb ? <p className="mt-2.5 text-[14px] text-ink-2">{pane.blurb}</p> : null}
+            </header>
+
+            <TabsContent value="look" className="grid gap-8">
+              <Group title="theme">
+                <div className="grid grid-cols-2 gap-3 px-0.5 sm:grid-cols-3">
+                  {PALETTE_IDS.map((id) => (
+                    <ThemeCard key={id} id={id} dark={dark} active={prefs.palette === id} onPick={() => onPrefs({ palette: id })} />
+                  ))}
+                </div>
+              </Group>
+              <Group title="light or dark">
+                <Tabs value={prefs.themeMode} onValueChange={(v) => onPrefs({ themeMode: v as ThemeMode })} className="gap-0">
+                  <TabsList aria-label="Light or dark" className={cn(track, "sm:w-fit")}>
+                    <TabsTrigger value="system">
+                      <Monitor /> System
+                    </TabsTrigger>
+                    <TabsTrigger value="light">
+                      <Sun /> Light
+                    </TabsTrigger>
+                    <TabsTrigger value="dark">
+                      <Moon /> Dark
+                    </TabsTrigger>
                   </TabsList>
                 </Tabs>
-              </Field>
+              </Group>
+              <Group title="page">
+                <div className="grid gap-3">
+                  <Field label="Row density" hint="Compact fits more tabs on screen.">
+                    <Tabs value={prefs.density} onValueChange={(v) => onPrefs({ density: v as Density })} className="gap-0">
+                      <TabsList aria-label="Row density" className={track}>
+                        <TabsTrigger value="cozy">Cozy</TabsTrigger>
+                        <TabsTrigger value="compact">Compact</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </Field>
+                  <Field label="Pip's world" hint="The little landscape under the sidebar.">
+                    <Switch checked={prefs.scenery} onCheckedChange={(v) => onPrefs({ scenery: v })} aria-label="Show Pip's world" />
+                  </Field>
+                </div>
+              </Group>
+            </TabsContent>
+
+            <TabsContent value="general" className="grid gap-3">
               <Field label="Close tabs after saving" hint="Off keeps your windows as they are.">
                 <Switch checked={prefs.closeOnPark} onCheckedChange={(v) => onPrefs({ closeOnPark: v })} aria-label="Close tabs after saving" />
               </Field>
               <Field label="Suggest snoozing tabs after" hint="Snoozed tabs stay open but stop using memory.">
                 <Select value={String(prefs.staleDays)} onValueChange={(v) => onPrefs({ staleDays: Number(v) })}>
-                  <SelectTrigger aria-label="Suggest snoozing after" className="bg-raised-2 hover:bg-[color-mix(in_oklab,var(--raised-2)_80%,var(--ink))]">
+                  <SelectTrigger aria-label="Suggest snoozing after">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper" align="end">
@@ -176,16 +299,16 @@ export function SettingsDialog({
               </Field>
             </TabsContent>
 
-            <TabsContent value="sync" className="grid gap-3">
+            <TabsContent value="sync" className="grid gap-4">
               {user ? (
-                <div className="grid gap-3 rounded-xl bg-raised px-4 py-4">
+                <div className="pix-s [--pc:var(--raised)] mx-0.5 grid gap-4 px-4 py-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-pip font-display text-lg text-[#1c1a27]">
+                    <span className="pix-s [--pc:var(--brand)] grid size-10 shrink-0 place-items-center font-display text-lg text-on-brand">
                       {(user.name || user.email)[0]?.toUpperCase()}
                     </span>
                     <div className="min-w-0">
                       <p className="truncate font-medium text-ink">{user.name || user.email}</p>
-                      <p className="truncate text-[13px] text-ink-3">
+                      <p className="truncate text-[13px] text-ink-2">
                         {sync.lastSyncError
                           ? "Last sync failed"
                           : sync.lastSyncedAt
@@ -195,7 +318,7 @@ export function SettingsDialog({
                     </div>
                   </div>
                   {sync.lastSyncError ? <p className="text-[13px] text-danger">{sync.lastSyncError}</p> : null}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-3">
                     <Button onClick={syncNow} disabled={busy === "sync"}>
                       <RefreshCw className={busy === "sync" ? "animate-spin motion-reduce:animate-none" : undefined} />
                       {busy === "sync" ? "Syncing…" : "Sync now"}
@@ -206,13 +329,16 @@ export function SettingsDialog({
                   </div>
                 </div>
               ) : (
-                <div className="grid gap-3 rounded-xl bg-raised px-4 py-4">
-                  <p className="text-[15px] text-ink">Your tabs live on this device. Sign in to keep your shelves in sync between browsers.</p>
+                <div className="pix-s [--pc:var(--raised)] mx-0.5 grid gap-4 px-4 py-5">
+                  <div className="flex items-start gap-4">
+                    <Pip mood="sleepy" size={56} />
+                    <p className="pt-1 text-[15px] text-ink">Your tabs live on this device. Sign in to keep your shelves in sync between browsers.</p>
+                  </div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <Button onClick={signIn} disabled={busy === "login" || !auth.primary}>
+                    <Button variant="brand" onClick={signIn} disabled={busy === "login" || !auth.primary}>
                       {busy === "login" ? "Waiting for Google…" : "Sign in with Google"}
                     </Button>
-                    <span className="text-[13px] text-ink-3">
+                    <span className="text-[13px] text-ink-2">
                       {auth.primary === "getAuthToken"
                         ? "Uses your browser's Google account."
                         : auth.primary === "webAuthFlow"
@@ -221,13 +347,13 @@ export function SettingsDialog({
                     </span>
                   </div>
                   {authError ? (
-                    <p role="alert" className="rounded-lg bg-sunk px-3 py-2 text-[13px] text-danger">
+                    <p role="alert" className="pix-s [--pc:var(--sunk)] px-3 py-2 text-[13px] text-danger">
                       {authError}
                     </p>
                   ) : null}
                 </div>
               )}
-              <details className="group rounded-xl bg-raised px-4 py-3 text-[13px] text-ink-2">
+              <details className="group pix-s [--pc:var(--raised)] mx-0.5 px-4 py-3 text-[13px] text-ink-2">
                 <summary className="cursor-pointer font-medium text-ink select-none">Setup details for developers</summary>
                 <div className="mt-3 grid gap-2">
                   <SetupLine label="Extension ID" value={extId} onCopy={copy} />
@@ -241,7 +367,7 @@ export function SettingsDialog({
               </details>
             </TabsContent>
 
-            <TabsContent value="data" className="grid gap-2">
+            <TabsContent value="data" className="grid gap-3">
               <Field label="Download a backup" hint="Every shelf and tab, as a JSON file.">
                 <Button variant="secondary" onClick={doExport}>
                   <Download /> Download
@@ -266,11 +392,11 @@ export function SettingsDialog({
             </TabsContent>
 
             <TabsContent value="keys">
-              <dl className="grid gap-1">
+              <dl className="grid gap-1.5 px-0.5">
                 {SHORTCUTS.map(([k, v]) => (
-                  <div key={k} className="grid grid-cols-[minmax(7.5rem,auto)_1fr] items-baseline gap-3 rounded-lg px-2 py-2 odd:bg-raised">
+                  <div key={k} className="pix-s [--pc:var(--raised)] grid grid-cols-[minmax(7.5rem,auto)_1fr] items-center gap-4 px-3 py-2">
                     <dt>
-                      <kbd className="rounded-md bg-sunk px-1.5 py-0.5 font-sans text-[13px] font-semibold text-ink">{k}</kbd>
+                      <kbd className="pix-s [--pc:var(--raised-2)] inline-block px-1.5 py-0.5 font-display text-[13px] font-semibold text-ink">{k}</kbd>
                     </dt>
                     <dd className="text-[14px] text-ink-2">{v}</dd>
                   </div>
@@ -278,19 +404,19 @@ export function SettingsDialog({
               </dl>
             </TabsContent>
 
-            <TabsContent value="about" className="grid gap-4">
-              <div className="flex items-center gap-4 rounded-xl bg-raised px-4 py-4">
-                <Pip mood="happy" size={56} />
+            <TabsContent value="about" className="grid gap-5">
+              <div className="pix pix-card [--pc:var(--brand-soft)] mx-1 flex items-center gap-4 px-4 py-4">
+                <Pip mood="happy" size={72} />
                 <div>
-                  <p className="font-display text-xl text-ink">toomanytabs</p>
-                  <p className="text-[13px] text-ink-3">
+                  <p className="font-display text-2xl text-ink">toomanytabs</p>
+                  <p className="text-[13px] text-ink-2">
                     Version {typeof chrome !== "undefined" && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : "dev"} · by Abhijit
                   </p>
                 </div>
               </div>
               <p className="text-[14px] text-ink-2">
-                Every tab you have open or saved, on one calm page. Your tabs stay on this device unless you sign in to sync.
-                Pip is the little tab that keeps the others.
+                Every tab you have open or saved, on one page. Your tabs stay on this device unless you sign in to sync. Pip is the
+                little tab that keeps the others.
               </p>
               <p className="text-[13px] text-ink-3">
                 Fonts: Pixelify Sans and Atkinson Hyperlegible Next, both under the SIL Open Font License. Interface built on Radix and
@@ -308,7 +434,7 @@ function SetupLine({ label, value, onCopy }: { label: string; value: string; onC
   return (
     <div className="flex min-w-0 items-center gap-2">
       <span className="shrink-0">{label}</span>
-      <code className="min-w-0 flex-1 truncate rounded-md bg-sunk px-2 py-1 font-mono text-[12px] text-ink">{value}</code>
+      <code className="pix-s [--pc:var(--sunk)] min-w-0 flex-1 truncate px-2 py-1 font-mono text-[12px] text-ink">{value}</code>
       <Button variant="ghost" size="icon-xs" aria-label={`Copy ${label}`} onClick={() => onCopy(value)}>
         <Copy />
       </Button>

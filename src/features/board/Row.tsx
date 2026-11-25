@@ -47,13 +47,23 @@ function IconAction({ label, onClick, children }: { label: string; onClick: () =
   )
 }
 
-function openFact(item: Item, now: number): string {
-  if (item.dupe) return "open twice"
-  if (item.audible) return "playing"
-  if (item.active) return "current tab"
-  if (item.discarded) return "snoozed"
+/** A fact worth a chip (loud) or a quiet bit of text. */
+function openFact(item: Item, now: number): { text: string; chip: boolean } | null {
+  if (item.dupe) return { text: "open twice", chip: true }
+  if (item.audible) return { text: "playing", chip: true }
+  if (item.active) return { text: "current tab", chip: true }
+  if (item.discarded) return { text: "snoozed", chip: false }
   const age = relativeAge(item.lastAccessed, now)
-  return age && age !== "now" ? `seen ${age} ago` : ""
+  return age && age !== "now" ? { text: `seen ${age} ago`, chip: false } : null
+}
+
+function Fact({ fact }: { fact: { text: string; chip: boolean } | null }) {
+  if (!fact) return null
+  return fact.chip ? (
+    <span className="pix-s [--pc:var(--brand-soft)] shrink-0 px-1.5 text-[11px] leading-[18px] font-semibold text-ink">{fact.text}</span>
+  ) : (
+    <span className="shrink-0 before:mr-2 before:content-['·']">{fact.text}</span>
+  )
 }
 
 /**
@@ -67,15 +77,17 @@ export const Row = memo(function Row({
   now,
   actions,
   animate,
+  compact,
 }: {
   item: Item
   shelves: TabGroup[]
   now: number
   actions: RowActions
   animate: boolean
+  compact: boolean
 }) {
   const isOpen = item.source === "open"
-  const fact = isOpen ? openFact(item, now) : ""
+  const fact = isOpen ? openFact(item, now) : null
   const otherShelves = shelves.filter((s) => s.id !== item.groupId)
 
   return (
@@ -93,17 +105,27 @@ export const Row = memo(function Row({
             actions.activate(item)
           }
         }}
-        className="group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-2 py-2 outline-none transition-colors duration-150 hover:bg-raised has-[[data-state=open]]:bg-raised focus-visible:bg-raised focus-visible:shadow-[inset_0_0_0_1.5px_var(--focus)] sm:px-3"
+        className={`group pix-s [--pc:transparent] grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-2.5 outline-none hover:[--pc:var(--panel-hover)] has-[[data-state=open]]:[--pc:var(--panel-hover)] focus-visible:[--pc:var(--panel-hover)] ${compact ? "py-1" : "py-2"}`}
       >
-        <Favicon url={item.url} host={item.host} fallbackSrc={item.favIconUrl} />
+        <Favicon url={item.url} host={item.host} fallbackSrc={item.favIconUrl} small={compact} />
         <div className="min-w-0">
-          <p className="truncate text-[15px] leading-snug font-medium text-ink" title={item.title}>
-            {item.title}
+          <p className="flex min-w-0 items-baseline gap-2 leading-snug">
+            <span className="truncate text-[15px] font-medium text-ink" title={item.title}>
+              {item.title}
+            </span>
+            {compact ? (
+              <span className="flex min-w-0 shrink-[3] items-center gap-2 text-[13px] text-ink-3 max-sm:hidden">
+                <span className="truncate">{item.host || item.url}</span>
+                <Fact fact={fact} />
+              </span>
+            ) : null}
           </p>
-          <p className="truncate text-[13px] leading-snug text-ink-3">
-            {item.host || item.url}
-            {fact ? <span> · {fact}</span> : null}
-          </p>
+          {compact ? null : (
+            <p className="flex min-w-0 items-center gap-2 text-[13px] leading-snug text-ink-3">
+              <span className="truncate">{item.host || item.url}</span>
+              <Fact fact={fact} />
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-0.5 opacity-100 transition-opacity duration-150 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:has-[[data-state=open]]:opacity-100">
           {isOpen ? (

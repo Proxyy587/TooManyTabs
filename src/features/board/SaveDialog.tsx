@@ -102,18 +102,18 @@ export function SaveDialog({
           </Button>
         </div>
 
-        <ul className="min-h-0 flex-1 overflow-y-auto px-3 sm:px-4" aria-label="Open tabs">
+        <ul className="min-h-0 flex-1 overflow-y-auto px-4 py-1 sm:px-5" aria-label="Open tabs">
           {openItems.map((it) => {
             const on = selected.has(it.key)
             return (
               <li key={it.key}>
-                <label className="grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-raised">
+                <label className="pix-s [--pc:transparent] grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-3 px-2.5 py-1.5 hover:[--pc:var(--pick)]">
                   <input type="checkbox" className="peer sr-only" checked={on} onChange={() => toggle(it.key)} />
                   <span
                     aria-hidden
-                    className="grid size-5 place-items-center rounded-md bg-raised-2 text-primary-foreground transition-colors duration-150 peer-checked:bg-primary peer-focus-visible:shadow-[0_0_0_2px_var(--focus)]"
+                    className="pix-s [--pc:var(--track)] grid size-4 place-items-center text-on-brand peer-checked:[--pc:var(--brand)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--focus)]"
                   >
-                    {on ? <Check className="size-3.5" strokeWidth={3} /> : null}
+                    {on ? <Check className="size-3" strokeWidth={4} /> : null}
                   </span>
                   <span className="flex min-w-0 items-center gap-2.5">
                     <Favicon url={it.url} host={it.host} fallbackSrc={it.favIconUrl} />

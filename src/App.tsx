@@ -36,14 +36,15 @@ export default function App() {
   const [saveOpen, setSaveOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general")
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("look")
   const [pipMood, setPipMood] = useState<PipMood>("idle")
   const searchRef = useRef<HTMLInputElement>(null)
   const moodTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light"
-  }, [dark])
+    document.documentElement.dataset.palette = prefs.palette
+  }, [dark, prefs.palette])
 
   const openItems = useMemo(() => items.filter((i) => i.source === "open"), [items])
   const twins = useMemo(() => duplicateTabsToClose(items), [items])
@@ -59,7 +60,7 @@ export default function App() {
     moodTimer.current = setTimeout(() => setPipMood(restingMood), 1400)
   }, [restingMood])
 
-  const openSettings = useCallback((tab: SettingsTab = "general") => {
+  const openSettings = useCallback((tab: SettingsTab = "look") => {
     setSettingsTab(tab)
     setSettingsOpen(true)
   }, [])
@@ -121,9 +122,12 @@ export default function App() {
           searchRef={searchRef}
           onOpenSave={() => setSaveOpen(true)}
           onOpenPalette={() => setPaletteOpen(true)}
-          onOpenSettings={() => openSettings("general")}
+          onOpenSettings={() => openSettings("look")}
           pipMood={pipMood}
           cheer={cheer}
+          prefs={prefs}
+          onPrefs={updatePrefs}
+          dark={dark}
         />
       </main>
 
@@ -145,9 +149,11 @@ export default function App() {
         onActivate={activate}
         onSaveTabs={() => setSaveOpen(true)}
         onCloseTwins={closeTwins}
-        onSettings={() => openSettings("general")}
+        onSettings={() => openSettings("look")}
         onShortcuts={() => openSettings("keys")}
         onToggleTheme={() => updatePrefs({ themeMode: dark ? "light" : "dark" })}
+        palette={prefs.palette}
+        onPalette={(palette) => updatePrefs({ palette })}
       />
       <SettingsDialog
         open={settingsOpen}
@@ -158,6 +164,7 @@ export default function App() {
         onPrefs={updatePrefs}
         user={data.user}
         sync={data.sync}
+        dark={dark}
       />
       <Toaster theme={dark ? "dark" : "light"} />
     </TooltipProvider>

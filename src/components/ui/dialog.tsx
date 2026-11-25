@@ -61,7 +61,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-1.5rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-xl bg-popover p-5 text-popover-foreground shadow-[var(--shadow-float)] outline-none dialog-motion sm:max-w-lg sm:p-6",
+          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-1.5rem)] translate-x-[-50%] translate-y-[-50%] gap-4 pix pix-float [--pc:var(--float)] p-5 text-popover-foreground outline-none dialog-motion sm:max-w-lg sm:p-6",
           className
         )}
         {...props}
@@ -70,7 +70,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="press absolute top-3 right-3 grid size-8 place-items-center rounded-full text-ink-3 hover:bg-raised hover:text-ink disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            className="press pix-s pix-flat [--pc:transparent] absolute top-3 right-3 grid size-8 cursor-pointer place-items-center text-ink-3 hover:[--pc:color-mix(in_oklab,var(--ink)_10%,transparent)] hover:text-ink disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
             <span className="sr-only">Close</span>
@@ -125,7 +125,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg leading-tight font-semibold", className)}
+      className={cn("font-display text-xl leading-tight font-semibold", className)}
       {...props}
     />
   )

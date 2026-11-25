@@ -6,13 +6,13 @@ function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive
   return <TabsPrimitive.Root data-slot="tabs" className={cn("flex flex-col gap-4", className)} {...props} />
 }
 
-/** A pill track; the selected segment is a raised pill. Scrolls sideways on narrow screens. */
+/** A tonal track; the selected segment is a lifted block with a brand lip. Scrolls sideways on narrow screens. */
 function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.List>) {
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        "inline-flex w-full max-w-full items-center gap-1 overflow-x-auto rounded-full bg-raised p-1 [scrollbar-width:none] sm:w-fit",
+        "pix-s [--pc:var(--raised)] inline-flex w-full max-w-full items-center gap-1.5 overflow-x-auto p-1.5 [scrollbar-width:none] sm:w-fit",
         className
       )}
       {...props}
@@ -25,8 +25,8 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "press inline-flex h-8 flex-1 shrink-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-[13px] sm:px-3.5 sm:text-sm font-semibold whitespace-nowrap text-ink-2 outline-none sm:flex-none",
-        "hover:text-ink data-[state=active]:bg-[var(--seg-active)] data-[state=active]:text-ink data-[state=active]:shadow-[0_1px_2px_rgb(20_18_28/0.08)]",
+        "press pix-s [--pc:transparent] inline-flex h-8 flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 px-2.5 text-[13px] font-semibold whitespace-nowrap text-ink-2 outline-none sm:flex-none sm:px-3.5 sm:text-sm",
+        "hover:text-ink data-[state=active]:[--pc:var(--seg-active)] data-[state=active]:text-ink",
         "[&_svg]:size-4 [&_svg]:shrink-0",
         className
       )}

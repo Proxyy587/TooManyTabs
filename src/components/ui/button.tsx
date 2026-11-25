@@ -4,18 +4,26 @@ import { cn } from "@/lib/utils"
 import { Slot } from "radix-ui"
 
 const buttonVariants = cva(
-  "press inline-flex shrink-0 items-center justify-center gap-2 rounded-full text-sm font-semibold whitespace-nowrap outline-none disabled:pointer-events-none disabled:bg-raised-2 disabled:text-ink-3 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "press pix-s inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 text-sm font-semibold whitespace-nowrap outline-none disabled:pointer-events-none disabled:[--pc:var(--raised-2)] disabled:[--btn-edge:transparent] disabled:text-ink-3 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        // the one primary action: an ink pill
-        default: "bg-primary text-primary-foreground hover:bg-[color-mix(in_oklab,var(--ink)_86%,var(--ground))]",
-        destructive: "bg-danger text-white hover:bg-[color-mix(in_oklab,var(--danger)_88%,black)]",
-        // secondary: a tonal pill
-        secondary: "bg-raised text-ink hover:bg-raised-2",
-        outline: "bg-raised text-ink hover:bg-raised-2",
-        ghost: "text-ink-2 hover:bg-raised hover:text-ink",
-        link: "text-tab-blue underline-offset-4 hover:underline",
+        // the one primary action: an ink block with a brand-coloured lip
+        default:
+          "pix-btn [--pc:var(--ink)] [--btn-edge:var(--brand)] text-primary-foreground hover:[--pc:color-mix(in_oklab,var(--ink)_82%,var(--ground))]",
+        destructive:
+          "pix-btn [--pc:var(--danger)] [--btn-edge:color-mix(in_oklab,var(--danger)_62%,black)] text-white hover:[--pc:color-mix(in_oklab,var(--danger)_88%,black)]",
+        // secondary: a tonal block
+        secondary:
+          "pix-btn [--pc:var(--raised-2)] [--btn-edge:var(--edge)] text-ink hover:[--pc:color-mix(in_oklab,var(--raised-2)_86%,var(--ink))]",
+        outline:
+          "pix-btn [--pc:var(--raised-2)] [--btn-edge:var(--edge)] text-ink hover:[--pc:color-mix(in_oklab,var(--raised-2)_86%,var(--ink))]",
+        // flat icon / text buttons: a tint on hover, no lip
+        ghost: "pix-flat [--pc:transparent] text-ink-2 hover:[--pc:color-mix(in_oklab,var(--ink)_10%,transparent)] hover:text-ink",
+        // the brand-colour block, only for a single "yes!" such as sign-in
+        brand:
+          "pix-btn [--pc:var(--brand)] [--btn-edge:color-mix(in_oklab,var(--brand)_55%,var(--ink))] text-on-brand hover:[--pc:color-mix(in_oklab,var(--brand)_88%,var(--ink))]",
+        link: "pix-flat [--pc:transparent] text-link underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 px-4 has-[>svg]:px-3.5",

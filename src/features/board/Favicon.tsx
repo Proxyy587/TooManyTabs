@@ -18,12 +18,12 @@ export function Favicon({ url, host, fallbackSrc, small }: { url: string; host: 
   const src = sources[failed]
   const letter = (host.replace(/^www\./, "")[0] || "•").toUpperCase()
   return (
-    <span className={`grid shrink-0 place-items-center rounded-lg bg-raised ${small ? "size-6" : "size-8"}`} aria-hidden>
+    <span className={`pix-s [--pc:var(--ground)] grid shrink-0 place-items-center ${small ? "size-5" : "size-7"}`} aria-hidden>
       {src ? (
         <img src={src} alt="" width={16} height={16} className="size-4" onError={() => setFailed((n) => n + 1)} />
       ) : (
         <span
-          className="grid size-5 place-items-center rounded-md text-[11px] font-bold text-white"
+          className={`grid place-items-center font-display text-[11px] font-bold text-white ${small ? "size-4" : "size-5"}`}
           style={{ background: `oklch(0.62 0.13 ${hueFor(host)})` }}
         >
           {letter}

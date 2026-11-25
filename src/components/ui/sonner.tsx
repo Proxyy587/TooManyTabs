@@ -11,9 +11,9 @@ function Toaster({ theme, ...props }: ToasterProps & { theme: "light" | "dark" }
       toastOptions={{
         classNames: {
           toast:
-            "!rounded-full !border-0 !bg-primary !text-primary-foreground !shadow-[var(--shadow-float)] !py-2.5 !px-4 !font-sans !text-sm !gap-3 !w-auto !min-w-0 !max-w-[min(92vw,440px)] !left-1/2 !-translate-x-1/2",
+            "pix-s pix-float [--pc:var(--ink)] !rounded-none !border-0 !bg-[var(--pc)] !text-primary-foreground ![box-shadow:-2px_0_0_0_var(--ink),2px_0_0_0_var(--ink),0_-2px_0_0_var(--ink),0_2px_0_0_var(--ink)] !py-2.5 !px-4 !font-sans !text-sm !gap-3 !w-auto !min-w-0 !max-w-[min(92vw,440px)] !left-1/2 !-translate-x-1/2",
           actionButton:
-            "!rounded-full !bg-[color-mix(in_oklab,var(--primary-foreground)_18%,transparent)] !text-primary-foreground !font-semibold !h-7 !px-3",
+            "!rounded-none !bg-[var(--brand)] !text-[var(--on-brand)] !font-semibold !h-7 !px-3",
           title: "!font-medium",
         },
       }}
