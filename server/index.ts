@@ -7,13 +7,15 @@ import http from "node:http";
 import authRoutes from "./routes/auth.js";
 import syncRoutes from "./routes/sync.js";
 import deviceRoutes from "./routes/device.js";
+import { googleConfig } from "./lib/google.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
 app.use(
   cors({
-    origin: "*",
+    // Only extension pages/workers talk to this API.
+    origin: (origin, cb) => cb(null, !origin || origin.startsWith("chrome-extension://")),
     methods: ["GET", "POST", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
@@ -25,13 +27,16 @@ app.get("/", (_req: Request, res: Response) => {
 });
 
 app.get("/health", (_req: Request, res: Response) => {
+  const g = googleConfig();
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
     database: process.env.DATABASE_URL ? "configured" : "not configured",
     jwt: process.env.JWT_SECRET ? "configured" : "not configured",
-    google: process.env.GOOGLE_CLIENT_ID ? "configured" : "not configured",
-    authMode: "chrome.identity.getAuthToken → POST /auth/google { accessToken }",
+    auth: {
+      getAuthToken: g.accessTokenLogin ? "ready" : "missing GOOGLE_EXTENSION_CLIENT_ID",
+      launchWebAuthFlow: g.codeLogin ? "ready" : "missing GOOGLE_WEB_CLIENT_ID / GOOGLE_WEB_CLIENT_SECRET",
+    },
   });
 });
 
@@ -39,6 +44,8 @@ app.use("/auth", authRoutes);
 app.use("/sync", syncRoutes);
 app.use("/device", deviceRoutes);
 
+// Express recognises error handlers by their four parameters.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("[server] Unhandled error:", err);
   res.status(500).json({ message: "Internal server error" });
@@ -60,12 +67,15 @@ server.on("error", (err: NodeJS.ErrnoException) => {
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`[server] TooManyTabs listening on http://127.0.0.1:${PORT}`);
   console.log(`[server] Health: http://127.0.0.1:${PORT}/health`);
-  console.log(`[server] Auth: chrome.identity.getAuthToken → POST /auth/google`);
+  const g = googleConfig();
+  console.log(
+    `[server] Auth: getAuthToken ${g.accessTokenLogin ? "ready" : "OFF"} · launchWebAuthFlow ${g.codeLogin ? "ready" : "OFF"}`
+  );
   console.log(`[server] Press Ctrl+C to stop`);
   if (!process.env.DATABASE_URL) console.warn("[server] DATABASE_URL is not set");
   if (!process.env.JWT_SECRET) console.warn("[server] JWT_SECRET is not set");
-  if (!process.env.GOOGLE_CLIENT_ID) {
-    console.warn("[server] GOOGLE_CLIENT_ID is not set (optional for access-token auth)");
+  else if (process.env.JWT_SECRET.length < 32) {
+    console.warn("[server] JWT_SECRET is shorter than 32 characters. Generate one: openssl rand -base64 48");
   }
 });
 

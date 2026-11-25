@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — Pixel world
+
+### Added
+- **Six themes** (Pip, Dusk, Mint, Peach, Sky, Bubblegum), each in light and dark, switchable from the sidebar, Settings → Look or ⌘K
+- Row **density** (Cozy / Compact)
+- Settings rebuilt as a side-nav layout with live theme previews
+
+### Changed
+- Stair-stepped pixel corners, hard shadows and chunky buttons everywhere; no more capsules
+- Pixel headings for shelves and settings; layout stays one minimal column
+- "Open twice" and "playing" show as chips
+
+### Fixed
+- Keyboard focus ring always shows on buttons, tabs and rows
+
 ## 0.3.0 — Shelf Revamp
 
 ### Added

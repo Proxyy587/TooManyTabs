@@ -1,29 +1,28 @@
 {
   "manifest_version": 3,
   "name": "TooManyTabs",
-  "version": "0.3.0",
-  "description": "A cozy shelf for your tabs — save, group, and sync across devices",
+  "version": "0.4.0",
+  "description": "Every tab you have open or saved, on one calm page. Find, save and close in seconds. Local-first.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqtMN6HdsJdPM7TZ+BNu2YzMEumtfgK49o+rkLwrUceA7rAUUkkQZi4+aEcpb3QtIJy6l3/0l65L5I4XO/o2n5/qgy/GbSu9MpFxTRMeqNDHd2ExDh5jb2muVr8A56txn03PeqtQ+oMYExWu7B+83zTnceN8Fo4aFOQogq777QgofdVdmybwVTABCssBwh3irdk515A88m/mlnJmhnopBSK311o3zH3l224PyfceTMM8XcPCcelFGZfuITjgADNAHg7E6a1P+Cs9L/gpVDHdKJ82E/LODB0712P6EWRcQBuJCtRs2X0RZ/P1D75+k2mX+0ScWnnbd8LrioqahBE1eRQIDAQAB",
   "permissions": [
     "tabs",
     "storage",
     "contextMenus",
     "identity",
-    "alarms"
+    "alarms",
+    "favicon"
   ],
   "host_permissions": [
-    "http://localhost:3000/*",
-    "http://127.0.0.1:3000/*",
-    "https://www.googleapis.com/*",
-    "https://accounts.google.com/*"
+    "http://localhost:3000/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "icons": {
-    "16": "icon.svg",
-    "48": "icon.svg",
-    "128": "icon.svg"
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
   "oauth2": {
     "client_id": "INJECTED_FROM_ENV_AT_BUILD.apps.googleusercontent.com",
@@ -33,6 +32,24 @@
     ]
   },
   "action": {
-    "default_title": "TooManyTabs"
+    "default_title": "TooManyTabs",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+K"
+      },
+      "description": "Open TooManyTabs"
+    },
+    "save-tab-to-later": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Save the current tab to Later"
+    }
   }
 }

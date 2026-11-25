@@ -1,266 +1,244 @@
-console.log("[TooManyTabs] background service worker loaded");
+// TooManyTabs background service worker (MV3).
+// Jobs: toolbar/context-menu/keyboard entry points, quick saves, sign-in
+// hand-off to the sync server, and periodic sync. The page owns all other UI.
 
 // Replaced at build time from root .env → API_BASE_URL
 const API_BASE_URL = "http://localhost:3000";
 
-const SYNC_ALARM_NAME = "toomanytabs-periodic-sync";
+const LATER_SHELF_ID = "00000000-0000-4000-8000-000000000001";
+const SYNC_ALARM = "toomanytabs-periodic-sync";
 const SYNC_INTERVAL_MINUTES = 5;
+const INTERNAL = /^(chrome|chrome-extension|edge|brave|about|devtools|view-source|chrome-search):/i;
+
+// ------------------------------------------------------------------ lifecycle
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({
-      id: "display-tabs",
-      title: "Open TooManyTabs",
-      contexts: ["page", "action"],
-    });
-    chrome.contextMenus.create({
-      id: "save-current-tabs",
-      title: "Save All Tabs",
-      contexts: ["page", "action"],
-    });
-    chrome.contextMenus.create({
-      id: "save-this-tab",
-      title: "Save This Tab",
-      contexts: ["page", "action"],
-    });
+    const contexts = ["page", "action"];
+    chrome.contextMenus.create({ id: "open", title: "Open TooManyTabs", contexts });
+    chrome.contextMenus.create({ id: "save-tab", title: "Save this tab to Later", contexts });
+    chrome.contextMenus.create({ id: "save-window", title: "Save this window as a shelf", contexts });
+    chrome.contextMenus.create({ id: "save-close-window", title: "Save and close this window", contexts });
   });
+  chrome.alarms.create(SYNC_ALARM, { periodInMinutes: SYNC_INTERVAL_MINUTES });
+  migrateLegacySessions()
+    .then(foldTitleShelves)
+    .catch((e) => console.error("[migrate]", e));
+});
 
-  chrome.alarms.create(SYNC_ALARM_NAME, { periodInMinutes: SYNC_INTERVAL_MINUTES });
-  migrateLegacySessions().catch((e) => console.error("[migrate]", e));
+chrome.runtime.onStartup.addListener(() => {
+  chrome.alarms.create(SYNC_ALARM, { periodInMinutes: SYNC_INTERVAL_MINUTES });
+  fullSync().catch(recordSyncError);
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === SYNC_ALARM) fullSync().catch(recordSyncError);
+});
+
+chrome.action.onClicked.addListener(() => openShelf());
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  const run = {
+    open: () => openShelf(),
+    "save-tab": () => tab && saveTabToLater(tab),
+    "save-window": () => tab && saveWindow(tab.windowId, { close: false }),
+    "save-close-window": () => tab && saveWindow(tab.windowId, { close: true }),
+  }[info.menuItemId];
+  if (run) Promise.resolve(run()).catch((e) => console.error("[menu]", e));
+});
+
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (command !== "save-tab-to-later") return;
+  const go = tab ? Promise.resolve(tab) : chrome.tabs.query({ active: true, lastFocusedWindow: true }).then((t) => t[0]);
+  go.then((t) => t && saveTabToLater(t)).catch((e) => console.error("[command]", e));
 });
 
 async function migrateLegacySessions() {
-  const { tabGroups = [], savedSessions = [] } = await chrome.storage.local.get([
-    "tabGroups",
-    "savedSessions",
-  ]);
+  const { tabGroups = [], savedSessions = [] } = await chrome.storage.local.get(["tabGroups", "savedSessions"]);
   if (!Array.isArray(savedSessions) || savedSessions.length === 0) return;
-
   const migrated = savedSessions.map((s) => ({
     id: crypto.randomUUID(),
     name: s.groupLabel || `Session ${new Date(s.timestamp || Date.now()).toLocaleString()}`,
     pinned: false,
-    tabs: (s.tabs || []).map((t, i) => ({
-      url: t.url,
-      title: t.title || "Untitled",
-      favIconUrl: t.favIconUrl || null,
-      position: i,
-    })),
-    updatedAt: new Date(s.timestamp || Date.now()).toISOString(),
+    tabs: (s.tabs || []).map((t, i) => ({ url: t.url, title: t.title || t.url, favIconUrl: t.favIconUrl || null, position: i })),
+    createdAt: new Date(s.timestamp || Date.now()).toISOString(),
+    updatedAt: new Date().toISOString(),
     deleted: false,
     dirty: true,
   }));
+  await chrome.storage.local.set({ tabGroups: [...migrated, ...tabGroups], savedSessions: [] });
+}
 
-  await chrome.storage.local.set({
-    tabGroups: [...migrated, ...(tabGroups || [])],
-    savedSessions: [],
+/**
+ * Before 0.4, "Save This Tab" created a whole new shelf named after the page
+ * title, so shelves like "Basic Usage | Better Auth" piled up and showed as
+ * filter tabs. Fold those one-tab, title-named shelves into Later (no tab is
+ * lost; the old shelf becomes a tombstone so sync deletes it too).
+ */
+async function foldTitleShelves() {
+  const now = new Date().toISOString();
+  await mutateGroups((groups) => {
+    const junk = groups.filter(
+      (g) => !g.deleted && g.id !== LATER_SHELF_ID && g.tabs.length === 1 && (g.name === g.tabs[0].title || g.name === "Untitled")
+    );
+    if (!junk.length) return groups;
+    if (!groups.some((g) => g.id === LATER_SHELF_ID)) {
+      groups = [{ id: LATER_SHELF_ID, name: "Later", pinned: true, tabs: [], createdAt: now, updatedAt: now, dirty: true }, ...groups];
+    }
+    const junkIds = new Set(junk.map((g) => g.id));
+    return groups.map((g) => {
+      if (junkIds.has(g.id)) return { ...g, tabs: [], deleted: true, updatedAt: now, dirty: true };
+      if (g.id !== LATER_SHELF_ID) return g;
+      const have = new Set(g.tabs.map((t) => t.url));
+      const extra = junk.map((j) => j.tabs[0]).filter((t) => t && t.url && !have.has(t.url) && have.add(t.url));
+      const tabs = [...g.tabs, ...extra].map((t, i) => ({ ...t, position: i }));
+      return { ...g, deleted: false, tabs, updatedAt: now, dirty: true };
+    });
   });
-  console.log(`[TooManyTabs] Migrated ${migrated.length} legacy sessions → tabGroups`);
 }
 
-function notify(title, message) {
-  try {
-    chrome.action.setBadgeText({ text: "✓" });
-    chrome.action.setBadgeBackgroundColor({ color: "#34D399" });
-    setTimeout(() => chrome.action.setBadgeText({ text: "" }), 2500);
-  } catch (_) {}
-  console.log(`[TooManyTabs] ${title}: ${message}`);
-}
+// ------------------------------------------------------------------ helpers
 
 async function openShelf() {
   const url = chrome.runtime.getURL("index.html");
-  const tabs = await chrome.tabs.query({ url });
-  if (tabs[0]?.id) {
-    await chrome.tabs.update(tabs[0].id, { active: true });
-    if (tabs[0].windowId) await chrome.windows.update(tabs[0].windowId, { focused: true });
+  const [existing] = await chrome.tabs.query({ url: `${url}*` });
+  if (existing && existing.id != null) {
+    await chrome.tabs.update(existing.id, { active: true });
+    await chrome.windows.update(existing.windowId, { focused: true });
   } else {
     await chrome.tabs.create({ url, active: true });
   }
 }
 
-chrome.runtime.onStartup.addListener(() => {
-  chrome.alarms.create(SYNC_ALARM_NAME, { periodInMinutes: SYNC_INTERVAL_MINUTES });
-  fullSync().catch((e) => console.error("[sync] startup sync failed:", e));
-});
-
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === SYNC_ALARM_NAME) {
-    fullSync().catch((e) => console.error("[sync] periodic sync failed:", e));
-  }
-});
-
-chrome.action.onClicked.addListener(() => {
-  openShelf();
-});
-
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === "display-tabs") {
-    openShelf();
-  } else if (info.menuItemId === "save-current-tabs") {
-    saveAllCurrentTabs()
-      .then(async (group) => {
-        if (group) {
-          notify("Saved", group.name);
-          await openShelf();
-        }
-      })
-      .catch((e) => console.error(e));
-  } else if (info.menuItemId === "save-this-tab") {
-    if (tab && tab.url && tab.title) {
-      saveSingleTab(tab)
-        .then(async (group) => {
-          if (group) {
-            notify("Saved", group.name);
-            await openShelf();
-          }
-        })
-        .catch((e) => console.error(e));
-    }
-  }
-});
-
-async function getLocalGroups() {
-  const { tabGroups = [] } = await chrome.storage.local.get("tabGroups");
-  return tabGroups;
-}
-
-async function setLocalGroups(groups) {
-  await chrome.storage.local.set({ tabGroups: groups });
-}
-
-function isValidTabUrl(url) {
-  return url && !url.startsWith("chrome://") && !url.startsWith("chrome-extension://") && !url.startsWith("edge://") && !url.startsWith("brave://");
-}
-
-async function saveAllCurrentTabs(groupName) {
+function flashBadge(text, color) {
   try {
-    const tabs = await chrome.tabs.query({ currentWindow: true });
-    const validTabs = tabs.filter((t) => isValidTabUrl(t.url));
-    if (validTabs.length === 0) return null;
+    chrome.action.setBadgeBackgroundColor({ color });
+    chrome.action.setBadgeText({ text });
+    setTimeout(() => chrome.action.setBadgeText({ text: "" }), 2000);
+  } catch (_) {}
+}
 
-    const formattedTabs = validTabs.map((t, i) => ({
-      url: t.url,
-      title: t.title || "Untitled",
-      favIconUrl: t.favIconUrl || null,
-      position: i,
-    }));
+function toTabData(t, i) {
+  return { url: t.url, title: t.title || t.url, favIconUrl: t.favIconUrl || null, position: i };
+}
 
-    const groups = await getLocalGroups();
-    const newGroup = {
-      id: crypto.randomUUID(),
-      name: groupName || `Session ${new Date().toLocaleString()}`,
-      pinned: false,
-      tabs: formattedTabs,
-      updatedAt: new Date().toISOString(),
-      deleted: false,
-      dirty: true,
-    };
-    groups.unshift(newGroup);
-    await setLocalGroups(groups);
+/** Serialised read-modify-write of tabGroups (mirrors src/lib/api.ts mutateGroups). */
+let writeChain = Promise.resolve();
+function mutateGroups(fn) {
+  const run = writeChain.then(async () => {
+    const { tabGroups = [] } = await chrome.storage.local.get("tabGroups");
+    const next = fn(Array.isArray(tabGroups) ? tabGroups : []);
+    await chrome.storage.local.set({ tabGroups: next });
+    return next;
+  });
+  writeChain = run.catch(() => {});
+  return run;
+}
 
-    // Avoid closing the last tab in the window (would close the browser window)
-    const idsToClose = validTabs.map((t) => t.id);
-    if (idsToClose.length >= tabs.length && tabs.length <= 1) {
-      // keep the single tab open
-    } else if (idsToClose.length >= tabs.length) {
-      // leave one tab so the window stays open
-      chrome.tabs.remove(idsToClose.slice(0, -1));
-    } else {
-      chrome.tabs.remove(idsToClose);
+async function saveTabToLater(tab) {
+  if (!tab.url || INTERNAL.test(tab.url)) return;
+  const now = new Date().toISOString();
+  await mutateGroups((groups) => {
+    if (!groups.some((g) => g.id === LATER_SHELF_ID)) {
+      groups = [{ id: LATER_SHELF_ID, name: "Later", pinned: true, tabs: [], createdAt: now, updatedAt: now, dirty: true }, ...groups];
     }
-
-    try {
-      chrome.action.setBadgeText({ text: String(groups.filter((g) => !g.deleted).length) });
-      chrome.action.setBadgeBackgroundColor({ color: "#3B82F6" });
-      setTimeout(() => chrome.action.setBadgeText({ text: "" }), 3000);
-    } catch (_) {}
-
-    pushSyncQueue().catch((e) => console.error("[sync] push after save failed:", e));
-    return newGroup;
-  } catch (err) {
-    console.error("[TooManyTabs] Error saving tabs:", err);
-    throw err;
-  }
+    return groups.map((g) => {
+      if (g.id !== LATER_SHELF_ID) return g;
+      const tabs = g.tabs.some((t) => t.url === tab.url) ? g.tabs : [...g.tabs, toTabData(tab, g.tabs.length)];
+      return { ...g, deleted: false, tabs, updatedAt: now, dirty: true };
+    });
+  });
+  flashBadge("+1", "#1C1A27");
+  const { closeOnPark } = await chrome.storage.local.get("closeOnPark");
+  if (closeOnPark === true && tab.id != null) await chrome.tabs.remove(tab.id).catch(() => {});
+  pushSyncQueue().catch(recordSyncError);
 }
 
-async function saveSingleTab(tab) {
-  try {
-    if (!isValidTabUrl(tab.url)) return null;
-
-    const groups = await getLocalGroups();
-    const newGroup = {
-      id: crypto.randomUUID(),
-      name: tab.title || "Untitled",
-      pinned: false,
-      tabs: [
-        {
-          url: tab.url,
-          title: tab.title || "Untitled",
-          favIconUrl: tab.favIconUrl || null,
-          position: 0,
-        },
-      ],
-      updatedAt: new Date().toISOString(),
-      deleted: false,
-      dirty: true,
-    };
-    groups.unshift(newGroup);
-    await setLocalGroups(groups);
-
-    if (tab.id != null) chrome.tabs.remove(tab.id);
-    pushSyncQueue().catch((e) => console.error("[sync] push after save failed:", e));
-    return newGroup;
-  } catch (err) {
-    console.error("[TooManyTabs] Error saving tab:", err);
-    throw err;
-  }
+async function saveWindow(windowId, { close }) {
+  const tabs = (await chrome.tabs.query({ windowId })).filter((t) => t.url && !INTERNAL.test(t.url));
+  if (!tabs.length) return;
+  const now = new Date().toISOString();
+  const seen = new Set();
+  const unique = tabs.filter((t) => (seen.has(t.url) ? false : (seen.add(t.url), true)));
+  const label = new Date().toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const group = {
+    id: crypto.randomUUID(),
+    name: `Window · ${label}`,
+    pinned: false,
+    tabs: unique.map(toTabData),
+    createdAt: now,
+    updatedAt: now,
+    dirty: true,
+  };
+  await mutateGroups((groups) => [group, ...groups]);
+  flashBadge(String(unique.length), "#1C1A27");
+  // Open the shelf first so closing the window never leaves the user with nothing.
+  await openShelf();
+  if (close) await chrome.tabs.remove(tabs.map((t) => t.id)).catch(() => {});
+  pushSyncQueue().catch(recordSyncError);
 }
+
+// ------------------------------------------------------------------ auth
 
 function detectPlatform() {
-  return navigator.userAgent.includes("Edg/")
-    ? "edge"
-    : navigator.userAgent.includes("Brave")
-      ? "brave"
-      : "chrome";
+  if (navigator.brave) return "brave";
+  const ua = navigator.userAgent;
+  if (ua.includes("Edg/")) return "edge";
+  if (ua.includes("OPR/")) return "opera";
+  return "chrome";
 }
 
 function removeCachedGoogleToken(token) {
   return new Promise((resolve) => {
-    if (!token) {
-      resolve();
-      return;
-    }
+    if (!token || !chrome.identity || !chrome.identity.removeCachedAuthToken) return resolve();
     chrome.identity.removeCachedAuthToken({ token }, () => resolve());
   });
 }
 
 function clearAllCachedGoogleTokens() {
   return new Promise((resolve) => {
-    if (chrome.identity.clearAllCachedAuthTokens) {
-      chrome.identity.clearAllCachedAuthTokens(() => resolve());
-    } else {
-      resolve();
-    }
+    if (chrome.identity && chrome.identity.clearAllCachedAuthTokens) chrome.identity.clearAllCachedAuthTokens(() => resolve());
+    else resolve();
   });
+}
+
+async function recordSyncError(err) {
+  const message = err && err.message ? err.message : String(err);
+  console.error("[sync]", message);
+  try {
+    await chrome.storage.local.set({ lastSyncError: message });
+  } catch (_) {}
+}
+
+function describeFetchFailure(err) {
+  return new Error(
+    `Can't reach the sync server at ${API_BASE_URL}. Start it with "npm run server" ` +
+      `(or check API_BASE_URL). Your tabs stay safe on this device. (${err && err.message ? err.message : err})`
+  );
+}
+
+async function apiFetch(path, options) {
+  try {
+    return await fetch(`${API_BASE_URL}${path}`, options);
+  } catch (err) {
+    throw describeFetchFailure(err);
+  }
 }
 
 async function completeBackendAuth(payload) {
   const platform = detectPlatform();
-  const res = await fetch(`${API_BASE_URL}/auth/google`, {
+  const res = await apiFetch("/auth/google", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...payload,
-      deviceName: `${platform} on ${navigator.platform}`,
-      platform,
-    }),
+    body: JSON.stringify({ ...payload, deviceName: `${platform} on ${navigator.platform}`, platform }),
   });
-
   if (!res.ok) {
-    const errText = await res.text().catch(() => "Unknown error");
-    throw new Error(`Backend authentication failed: ${errText}`);
+    let message = "";
+    try {
+      message = (await res.json()).message || "";
+    } catch (_) {}
+    throw new Error(`Sync server refused sign-in (${res.status}): ${message || res.statusText}`);
   }
-
   const data = await res.json();
   await chrome.storage.local.set({
     authToken: data.token,
@@ -268,167 +246,85 @@ async function completeBackendAuth(payload) {
     user: data.user,
     deviceId: data.deviceId,
     lastSyncedAt: null,
+    lastSyncError: null,
     googleAccessToken: payload.accessToken || null,
   });
-  await chrome.storage.local.remove("authLoginError");
-
-  fullSync().catch((e) => console.error("[sync] post-login sync failed:", e));
+  fullSync().catch(recordSyncError);
   return data;
 }
 
 /**
- * Completes login after the extension PAGE obtained a Google token via
- * chrome.identity.getAuthToken (must run in a visible page, not only SW).
+ * Finishes sign-in after the PAGE obtained proof of identity:
+ *  - { accessToken } from chrome.identity.getAuthToken (Chrome Extension client), or
+ *  - { code, codeVerifier, redirectUri } from launchWebAuthFlow (Web client + PKCE).
  */
-async function loginWithGoogleAccessToken(accessToken) {
-  if (!accessToken || typeof accessToken !== "string") {
-    throw new Error("Missing Google access token");
+async function loginWithGoogleCredential(request) {
+  if (typeof request.accessToken === "string" && request.accessToken) {
+    try {
+      return await completeBackendAuth({ accessToken: request.accessToken });
+    } catch (err) {
+      await removeCachedGoogleToken(request.accessToken);
+      throw err;
+    }
   }
-  try {
-    return await completeBackendAuth({ accessToken });
-  } catch (err) {
-    await removeCachedGoogleToken(accessToken);
-    throw err;
+  if (typeof request.code === "string" && typeof request.codeVerifier === "string" && typeof request.redirectUri === "string") {
+    return completeBackendAuth({ code: request.code, codeVerifier: request.codeVerifier, redirectUri: request.redirectUri });
   }
+  throw new Error("Sign-in must start from the TooManyTabs page.");
 }
 
 async function logout() {
-  const { authToken, googleAccessToken } = await chrome.storage.local.get([
-    "authToken",
-    "googleAccessToken",
-  ]);
+  const { authToken, googleAccessToken } = await chrome.storage.local.get(["authToken", "googleAccessToken"]);
   if (authToken) {
-    try {
-      await fetch(`${API_BASE_URL}/auth/logout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
-    } catch (_) {}
+    await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+    }).catch(() => {});
   }
-
+  await removeCachedGoogleToken(googleAccessToken);
   await clearAllCachedGoogleTokens();
-  if (googleAccessToken) await removeCachedGoogleToken(googleAccessToken);
-
   await chrome.storage.local.remove([
     "authToken",
     "refreshToken",
     "user",
     "deviceId",
     "lastSyncedAt",
+    "lastSyncError",
     "googleAccessToken",
-    "authLoginError",
   ]);
 }
 
 async function authedFetch(path, options = {}) {
-  const { authToken, refreshToken } = await chrome.storage.local.get([
-    "authToken",
-    "refreshToken",
-  ]);
-  if (!authToken) throw new Error("Not logged in");
-
+  const { authToken, refreshToken } = await chrome.storage.local.get(["authToken", "refreshToken"]);
+  if (!authToken) throw new Error("Not signed in");
   const doFetch = (token) =>
-    fetch(`${API_BASE_URL}${path}`, {
+    apiFetch(path, {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        ...(options.headers || {}),
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(options.headers || {}) },
     });
-
   let res = await doFetch(authToken);
-
   if (res.status === 401 && refreshToken) {
-    const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    const refreshRes = await apiFetch("/auth/refresh", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
     });
-
-    if (refreshRes.ok) {
-      const { token } = await refreshRes.json();
-      await chrome.storage.local.set({ authToken: token });
-      res = await doFetch(token);
-    } else {
+    if (!refreshRes.ok) {
       await logout();
-      throw new Error("Session expired, please log in again");
+      throw new Error("Your session expired. Sign in again to keep syncing.");
     }
+    const { token } = await refreshRes.json();
+    await chrome.storage.local.set({ authToken: token });
+    res = await doFetch(token);
   }
-
   return res;
 }
 
-async function pushSyncQueue() {
-  const { authToken } = await chrome.storage.local.get("authToken");
-  if (!authToken) return;
-
-  const groups = await getLocalGroups();
-  const dirty = groups.filter((g) => g.dirty);
-  if (dirty.length === 0) return;
-
-  const res = await authedFetch("/sync/push", {
-    method: "POST",
-    body: JSON.stringify({
-      groups: dirty.map((g) => ({
-        id: g.id,
-        name: g.name,
-        pinned: g.pinned,
-        deleted: !!g.deleted,
-        updatedAt: g.updatedAt,
-        tabs: g.tabs,
-      })),
-    }),
-  });
-
-  if (!res.ok) throw new Error(`Push failed: ${await res.text()}`);
-
-  const { accepted = [], conflicts = [] } = await res.json();
-  const acceptedSet = new Set(accepted);
-
-  const updated = groups.map((g) => {
-    if (acceptedSet.has(g.id)) return { ...g, dirty: false };
-    const conflict = conflicts.find((c) => c.id === g.id);
-    if (conflict) return { ...toLocalShape(conflict), dirty: false };
-    return g;
-  });
-
-  await setLocalGroups(updated.filter((g) => !g.deleted || g.dirty));
-}
-
-async function pullSyncChanges() {
-  const { authToken, lastSyncedAt } = await chrome.storage.local.get([
-    "authToken",
-    "lastSyncedAt",
-  ]);
-  if (!authToken) return;
-
-  const since = lastSyncedAt || "1970-01-01T00:00:00.000Z";
-  const res = await authedFetch(`/sync/pull?since=${encodeURIComponent(since)}`);
-  if (!res.ok) throw new Error(`Pull failed: ${await res.text()}`);
-
-  const { serverTime, groups: remoteGroups } = await res.json();
-  const localGroups = await getLocalGroups();
-  const localById = new Map(localGroups.map((g) => [g.id, g]));
-
-  for (const remote of remoteGroups) {
-    const local = localById.get(remote.id);
-    if (remote.deleted) {
-      localById.delete(remote.id);
-      continue;
-    }
-    if (local && local.dirty && new Date(local.updatedAt) > new Date(remote.updatedAt)) {
-      continue;
-    }
-    localById.set(remote.id, toLocalShape(remote));
-  }
-
-  await setLocalGroups(Array.from(localById.values()));
-  await chrome.storage.local.set({ lastSyncedAt: serverTime });
-}
+// ------------------------------------------------------------------ sync
+// Optimistic concurrency: each local group remembers the server `version` it
+// was based on. Pushing an edit made on an older version is a conflict; the
+// server returns its copy and we merge (union of tabs) instead of dropping
+// either side, then push the merge.
 
 function toLocalShape(remote) {
   return {
@@ -436,242 +332,139 @@ function toLocalShape(remote) {
     name: remote.name,
     pinned: !!remote.pinned,
     tabs: remote.tabs || [],
+    createdAt: remote.createdAt || remote.updatedAt,
     updatedAt: remote.updatedAt,
     deleted: !!remote.deleted,
     dirty: false,
+    version: remote.version,
   };
 }
 
-async function fullSync() {
-  await pushSyncQueue();
-  await pullSyncChanges();
+function mergeConflict(local, remote) {
+  if (remote.deleted || local.deleted) return toLocalShape(remote);
+  const seen = new Set();
+  const tabs = [...(remote.tabs || []), ...(local.tabs || [])]
+    .filter((t) => (seen.has(t.url) ? false : (seen.add(t.url), true)))
+    .map((t, i) => ({ ...t, position: i }));
+  const localNewer = new Date(local.updatedAt) > new Date(remote.updatedAt);
+  return {
+    ...toLocalShape(remote),
+    name: localNewer ? local.name : remote.name,
+    pinned: localNewer ? local.pinned : !!remote.pinned,
+    tabs,
+    updatedAt: new Date().toISOString(),
+    dirty: true,
+  };
 }
 
-async function updateGroup(groupId, patch) {
-  const groups = await getLocalGroups();
-  const updated = groups.map((g) =>
-    g.id === groupId
-      ? {
-          ...g,
-          ...patch,
-          updatedAt: new Date().toISOString(),
-          dirty: true,
-        }
-      : g
-  );
-  await setLocalGroups(updated);
-  pushSyncQueue().catch((e) => console.error(e));
-  return updated.find((g) => g.id === groupId);
-}
-
-async function deleteGroup(groupId) {
-  const groups = await getLocalGroups();
-  const updated = groups.map((g) =>
-    g.id === groupId
-      ? { ...g, deleted: true, updatedAt: new Date().toISOString(), dirty: true }
-      : g
-  );
-  await setLocalGroups(updated);
-  try {
-    await pushSyncQueue();
-    const after = await getLocalGroups();
-    await setLocalGroups(after.filter((g) => g.id !== groupId));
-  } catch (e) {
-    console.error("[sync] delete push failed:", e);
-  }
-}
-
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-  const { action } = request;
-
-  if (action === "googleLogin") {
-    // Prefer accessToken from the extension page (Chrome tutorial pattern).
-    // Falling back to SW getAuthToken is less reliable for interactive consent.
-    const run = async () => {
-      if (request.accessToken) {
-        return loginWithGoogleAccessToken(request.accessToken);
-      }
-      throw new Error(
-        "Sign-in must start from the TooManyTabs tab (chrome.identity.getAuthToken)."
-      );
-    };
-    run()
-      .then((data) => sendResponse({ success: true, data }))
-      .catch((err) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (action === "clearGoogleAuthCache") {
-    clearAllCachedGoogleTokens()
-      .then(() => sendResponse({ success: true }))
-      .catch((err) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (action === "logout") {
-    logout()
-      .then(() => sendResponse({ success: true }))
-      .catch((err) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (action === "getAuthState") {
-    chrome.storage.local.get(["authToken", "user"]).then(({ authToken, user }) => {
-      sendResponse({ loggedIn: !!authToken, user: user || null });
+let syncing = null;
+function fullSync() {
+  // Coalesce overlapping triggers (alarm, page, push) into one run.
+  if (!syncing) {
+    syncing = (async () => {
+      await pushSyncQueue();
+      await pullSyncChanges();
+      await pushSyncQueue(); // push anything a conflict merge produced
+      await chrome.storage.local.set({ lastSyncError: null });
+    })().finally(() => {
+      syncing = null;
     });
-    return true;
   }
+  return syncing;
+}
 
-  if (action === "getAllTabs") {
-    chrome.tabs.query({ currentWindow: true }, (tabs) => sendResponse({ tabs }));
-    return true;
-  }
+async function pushSyncQueue() {
+  const { authToken, tabGroups = [] } = await chrome.storage.local.get(["authToken", "tabGroups"]);
+  if (!authToken) return;
+  const dirty = tabGroups.filter((g) => g.dirty);
+  if (!dirty.length) return;
+  const sent = new Map(dirty.map((g) => [g.id, g.updatedAt]));
 
-  if (action === "getGroups") {
-    getLocalGroups().then((groups) =>
-      sendResponse({ groups: groups.filter((g) => !g.deleted) })
-    );
-    return true;
-  }
+  const res = await authedFetch("/sync/push", {
+    method: "POST",
+    body: JSON.stringify({
+      groups: dirty.map((g) => ({
+        id: g.id,
+        name: g.name,
+        pinned: !!g.pinned,
+        deleted: !!g.deleted,
+        updatedAt: g.updatedAt,
+        baseVersion: typeof g.version === "number" ? g.version : null,
+        tabs: g.tabs,
+      })),
+    }),
+  });
+  if (!res.ok) throw new Error(`Sync push failed (${res.status}): ${await res.text()}`);
+  const { accepted = [], conflicts = [], versions = {} } = await res.json();
+  const acceptedSet = new Set(accepted);
+  const conflictById = new Map(conflicts.map((c) => [c.id, c]));
 
-  if (action === "saveAllTabs") {
-    saveAllCurrentTabs(request.name)
-      .then((group) => sendResponse({ success: true, group }))
-      .catch((err) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (action === "saveTabs") {
-    // Save a provided tab list as a named group (used by the React UI)
-    (async () => {
-      const tabs = (request.tabs || []).filter((t) => isValidTabUrl(t.url));
-      if (tabs.length === 0) {
-        sendResponse({ success: false, error: "No valid tabs" });
-        return;
-      }
-      const groups = await getLocalGroups();
-      const newGroup = {
-        id: crypto.randomUUID(),
-        name: request.name || `Session ${new Date().toLocaleString()}`,
-        pinned: false,
-        tabs: tabs.map((t, i) => ({
-          url: t.url,
-          title: t.title || "Untitled",
-          favIconUrl: t.favIconUrl || null,
-          position: i,
-        })),
-        updatedAt: new Date().toISOString(),
-        deleted: false,
-        dirty: true,
-      };
-      groups.unshift(newGroup);
-      await setLocalGroups(groups);
-      pushSyncQueue().catch((e) => console.error(e));
-      sendResponse({ success: true, group: newGroup });
-    })().catch((err) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (action === "renameGroup") {
-    updateGroup(request.groupId, { name: request.name })
-      .then(() => sendResponse({ success: true }))
-      .catch((err) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (action === "togglePin") {
-    getLocalGroups().then(async (groups) => {
-      const current = groups.find((g) => g.id === request.groupId);
-      if (!current) {
-        sendResponse({ success: false, error: "Group not found" });
-        return;
-      }
-      await updateGroup(request.groupId, { pinned: !current.pinned });
-      sendResponse({ success: true });
-    });
-    return true;
-  }
-
-  if (action === "deleteGroup") {
-    deleteGroup(request.groupId)
-      .then(() => sendResponse({ success: true }))
-      .catch((err) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (action === "deleteTabFromGroup") {
-    (async () => {
-      const groups = await getLocalGroups();
-      const withSoftDelete = groups.map((g) => {
-        if (g.id !== request.groupId) return g;
-        const nextTabs = g.tabs.filter((_, i) => i !== request.tabIndex);
-        if (nextTabs.length === 0) {
-          return {
-            ...g,
-            tabs: [],
-            deleted: true,
-            updatedAt: new Date().toISOString(),
-            dirty: true,
-          };
+  // Re-read: the user may have edited while the request was in flight.
+  await mutateGroups((current) =>
+    current
+      .map((g) => {
+        const unchanged = sent.get(g.id) === g.updatedAt;
+        if (acceptedSet.has(g.id)) {
+          const version = versions[g.id] ? versions[g.id] : g.version;
+          return unchanged ? { ...g, dirty: false, version } : { ...g, version };
         }
-        return {
-          ...g,
-          tabs: nextTabs.map((t, i) => ({ ...t, position: i })),
-          updatedAt: new Date().toISOString(),
-          dirty: true,
-        };
-      });
-
-      await setLocalGroups(withSoftDelete);
-      pushSyncQueue()
-        .then(async () => {
-          const after = await getLocalGroups();
-          await setLocalGroups(after.filter((g) => !g.deleted));
-        })
-        .catch((e) => console.error(e));
-
-      sendResponse({
-        success: true,
-        groups: withSoftDelete.filter((g) => !g.deleted),
-      });
-    })().catch((err) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (action === "restoreTabs") {
-    (request.urls || []).forEach((url) => chrome.tabs.create({ url }));
-    sendResponse({ success: true });
-    return false;
-  }
-
-  if (action === "restoreSingleTab") {
-    chrome.tabs.create({ url: request.url });
-    sendResponse({ success: true });
-    return false;
-  }
-
-  if (action === "closeTabs") {
-    chrome.tabs.remove(request.tabIds);
-    sendResponse({ success: true });
-    return false;
-  }
-
-  if (action === "manualSync") {
-    fullSync()
-      .then(async () => {
-        const groups = await getLocalGroups();
-        sendResponse({ success: true, groups: groups.filter((g) => !g.deleted) });
+        if (conflictById.has(g.id)) return mergeConflict(g, conflictById.get(g.id));
+        return g;
       })
-      .catch((err) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
+      // a tombstone can go once the server has it
+      .filter((g) => !(g.deleted && !g.dirty))
+  );
+}
 
-  if (action === "pushDirty") {
-    pushSyncQueue()
-      .then(() => sendResponse({ success: true }))
-      .catch((err) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
+async function pullSyncChanges() {
+  const { authToken, lastSyncedAt } = await chrome.storage.local.get(["authToken", "lastSyncedAt"]);
+  if (!authToken) return;
+  const since = lastSyncedAt || "1970-01-01T00:00:00.000Z";
+  const res = await authedFetch(`/sync/pull?since=${encodeURIComponent(since)}`);
+  if (!res.ok) throw new Error(`Sync pull failed (${res.status}): ${await res.text()}`);
+  const { serverTime, groups: remoteGroups = [] } = await res.json();
 
-  return false;
+  await mutateGroups((current) => {
+    const byId = new Map(current.map((g) => [g.id, g]));
+    for (const remote of remoteGroups) {
+      const local = byId.get(remote.id);
+      if (local && local.dirty) {
+        // A local edit is pending: merge if the server moved on, otherwise our push wins.
+        if (typeof local.version !== "number" || remote.version > local.version) byId.set(remote.id, mergeConflict(local, remote));
+        continue;
+      }
+      if (remote.deleted) byId.delete(remote.id);
+      else byId.set(remote.id, toLocalShape(remote));
+    }
+    return [...byId.values()];
+  });
+  await chrome.storage.local.set({ lastSyncedAt: serverTime });
+}
+
+// ------------------------------------------------------------------ messages
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Only our own pages may drive the worker.
+  if (sender.id !== chrome.runtime.id) return false;
+  const reply = (p) =>
+    p
+      .then((data) => sendResponse({ success: true, data }))
+      .catch((err) => sendResponse({ success: false, error: err && err.message ? err.message : String(err) }));
+
+  switch (request && request.action) {
+    case "googleLogin":
+      reply(loginWithGoogleCredential(request));
+      return true;
+    case "logout":
+      reply(logout());
+      return true;
+    case "manualSync":
+      reply(fullSync());
+      return true;
+    case "pushDirty":
+      reply(pushSyncQueue().catch(recordSyncError));
+      return true;
+    default:
+      return false;
+  }
 });

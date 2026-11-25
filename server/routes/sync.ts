@@ -21,6 +21,8 @@ type GroupInput = {
   pinned?: boolean;
   deleted?: boolean;
   updatedAt?: string;
+  /** server version the client's copy was based on; null/absent for new groups */
+  baseVersion?: number | null;
   tabs?: TabInput[];
 };
 
@@ -28,6 +30,8 @@ function serializeGroup(group: {
   id: string;
   name: string;
   pinned: boolean;
+  version: number;
+  createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
   tabs: {
@@ -41,6 +45,8 @@ function serializeGroup(group: {
     id: group.id,
     name: group.name,
     pinned: group.pinned,
+    version: group.version,
+    createdAt: group.createdAt.toISOString(),
     updatedAt: group.updatedAt.toISOString(),
     deleted: group.deletedAt !== null,
     tabs: group.tabs
@@ -125,6 +131,7 @@ router.post("/push", async (req: AuthenticatedRequest, res: Response) => {
     const accepted: string[] = [];
     const conflicts: ReturnType<typeof serializeGroup>[] = [];
     const created: { clientId?: string; serverId: string }[] = [];
+    const versions: Record<string, number> = {};
 
     for (const incoming of incomingGroups) {
       if (!incoming.name || typeof incoming.name !== "string") {
@@ -139,13 +146,18 @@ router.post("/push", async (req: AuthenticatedRequest, res: Response) => {
         continue;
       }
 
-      const incomingUpdatedAt = incoming.updatedAt
-        ? new Date(incoming.updatedAt)
-        : new Date();
-
-      if (existing && existing.updatedAt > incomingUpdatedAt) {
-        conflicts.push(serializeGroup(existing));
-        continue;
+      // Optimistic concurrency on the server-owned version number. Clients
+      // that don't send baseVersion (older builds) fall back to timestamps.
+      if (existing) {
+        const base = typeof incoming.baseVersion === "number" ? incoming.baseVersion : null;
+        const stale =
+          base !== null
+            ? existing.version > base
+            : existing.updatedAt > (incoming.updatedAt ? new Date(incoming.updatedAt) : new Date());
+        if (stale) {
+          conflicts.push(serializeGroup(existing));
+          continue;
+        }
       }
 
       if (incoming.deleted) {
@@ -159,8 +171,10 @@ router.post("/push", async (req: AuthenticatedRequest, res: Response) => {
               originDevice: req.deviceId || existing.originDevice,
             })
             .where(eq(tabGroups.id, existing.id));
-          accepted.push(existing.id);
+          versions[existing.id] = existing.version + 1;
         }
+        // Accept even when the server never saw the group, so the client can drop its tombstone.
+        if (incoming.id) accepted.push(incoming.id);
         continue;
       }
 
@@ -195,6 +209,7 @@ router.post("/push", async (req: AuthenticatedRequest, res: Response) => {
         }
 
         accepted.push(existing.id);
+        versions[existing.id] = existing.version + 1;
       } else {
         const insertValues: {
           id?: string;
@@ -232,6 +247,7 @@ router.post("/push", async (req: AuthenticatedRequest, res: Response) => {
         }
 
         accepted.push(createdGroup.id);
+        versions[createdGroup.id] = createdGroup.version;
         if (incoming.id && incoming.id !== createdGroup.id) {
           created.push({ clientId: incoming.id, serverId: createdGroup.id });
         }
@@ -243,6 +259,7 @@ router.post("/push", async (req: AuthenticatedRequest, res: Response) => {
       accepted,
       conflicts,
       created,
+      versions,
     });
   } catch (error) {
     console.error("[sync/push]", error);

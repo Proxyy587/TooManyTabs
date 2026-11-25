@@ -1,141 +1,131 @@
-# TooManyTabs — Auth setup (do this in order)
+# TooManyTabs — Google Auth (Chrome Extension)
 
-Chrome extensions **cannot** read `.env` at runtime.  
-`bun run build` now copies `GOOGLE_CLIENT_ID` + `API_BASE_URL` from the **root** `.env` into `dist/manifest.json` and `dist/background.js`.
+## Why you see “Access blocked”
 
----
+Almost always one of these:
 
-## 0. Critical: use a Chrome Extension OAuth client
+1. **Wrong OAuth client type** — you created a **Web application** client (has a Client Secret).  
+   `chrome.identity.getAuthToken` only works with application type **Chrome Extension** (no secret).
+2. **Wrong Item ID** — Google Cloud Item ID ≠ loaded extension ID.
+3. **Testing mode** — your Gmail is not listed under OAuth consent screen → Test users.
+4. **Not Chrome** — Brave/Edge/Chromium forks often break `getAuthToken` (“Custom URI scheme is not supported”). Use **Google Chrome**.
 
-`chrome.identity.getAuthToken` only works with:
+Your repo currently has `GOOGLE_CLIENT_SECRET` in `.env`. That is the smoking gun for a **Web** client. Create a **new** Chrome Extension client and replace `GOOGLE_CLIENT_ID`. Leave the secret unused for this flow (or delete it from root `.env`).
 
-- Application type: **Chrome Extension**
-- Item ID: **`najlilhbfkkocnnhfaofffpfehcipahe`** (pinned by `manifest.json` → `key`)
-
-If your client has a **Client Secret**, it is a **Web** client — that will keep failing.  
-Create a **new** client of type **Chrome Extension** (no secret).
-
----
-
-## 1. Google Cloud Console
-
-1. Open [Credentials](https://console.cloud.google.com/apis/credentials)
-2. **OAuth consent screen**
-   - User type: External
-   - Publishing status: **Testing** is fine
-   - Add **Test users** → your Gmail (e.g. `abhijitbhattacharjee333@gmail.com`)
-3. **Create Credentials → OAuth client ID**
-   - Application type: **Chrome Extension**
-   - Name: `TooManyTabs`
-   - Item ID: `najlilhbfkkocnnhfaofffpfehcipahe`
-4. Copy the **Client ID** only
+Official guide: [Chrome OAuth how-to](https://developer.chrome.com/docs/extensions/how-to/integrate/oauth)
 
 ---
 
-## 2. Put the Client ID in `.env` (repo root)
+## Correct setup (do in order)
 
-Edit `/Users/abhijit/Developer/Projects/TooManyTabs/.env`:
+### 1. Confirm extension ID
+
+After loading `dist/` in `chrome://extensions`, the ID must be:
+
+```
+najlilhbfkkocnnhfaofffpfehcipahe
+```
+
+That ID is pinned by the `key` field in `manifest.json`. Settings → Account also shows it.  
+If it differs, you loaded the wrong folder (use `dist/`, not `public/` or `src/`).
+
+### 2. Google Cloud → OAuth consent screen
+
+1. [OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent)
+2. User type: **External**
+3. Publishing: **Testing** is fine
+4. **Test users** → add the exact Gmail you use in Chrome
+5. Scopes: email + profile is enough (requested by the extension)
+
+### 3. Create a Chrome Extension OAuth client
+
+1. [Credentials](https://console.cloud.google.com/apis/credentials) → **Create credentials** → **OAuth client ID**
+2. Application type: **Chrome Extension** (not Web, not Desktop)
+3. Name: `TooManyTabs`
+4. Item ID: `najlilhbfkkocnnhfaofffpfehcipahe`
+5. Create → copy **Client ID only**  
+   There is **no** Client Secret for this type. If Google shows a secret, you picked the wrong type.
+
+### 4. Put Client ID in root `.env`
 
 ```env
-GOOGLE_CLIENT_ID=YOUR_NEW_CHROME_EXTENSION_CLIENT_ID.apps.googleusercontent.com
+GOOGLE_CLIENT_ID=PASTE_CHROME_EXTENSION_CLIENT_ID.apps.googleusercontent.com
 API_BASE_URL=http://localhost:3000
 ```
 
-Mirror the same `GOOGLE_CLIENT_ID` in `server/.env` (optional for access-token login, good for consistency).
+- Do **not** put a Web-client secret in root `.env` for getAuthToken.
+- Mirror the same `GOOGLE_CLIENT_ID` in `server/.env` (optional for access-token login).
 
-You do **not** need `GOOGLE_CLIENT_SECRET` for this flow.
-
----
-
-## 3. Start the API
+### 5. Build + reload
 
 ```bash
-cd server
-bun run dev
-```
+# API
+cd server && bun run dev
 
-Leave it running. Ctrl+C stops it.  
-Check: http://localhost:3000/health
-
----
-
-## 4. Build the extension (injects env)
-
-From repo root:
-
-```bash
+# Extension (repo root)
 bun run build
 ```
 
-You should see:
+Build must print:
 
 ```
-[build] oauth2.client_id ← YOUR_CLIENT_ID...
-[build] API_BASE_URL     ← http://localhost:3000
+[build] oauth2.client_id ← YOUR_NEW_ID...
+[build] Extension ID must be: najlilhbfkkocnnhfaofffpfehcipahe
 ```
 
-Verify:
+If it warns about `GOOGLE_CLIENT_SECRET`, you are still on a Web client — fix step 3.
 
-```bash
-grep client_id dist/manifest.json
-```
+Then in Chrome:
 
-It must match `.env`, not the old `190659497018-…` ID.
+1. `chrome://extensions` → Remove old TooManyTabs if ID is wrong
+2. **Load unpacked** → select `dist/`
+3. Confirm ID = `najlilhbfkkocnnhfaofffpfehcipahe`
+4. Open TooManyTabs from the toolbar (full tab)
+5. Settings → **Sign in with Google** → click **Allow**
 
 ---
 
-## 5. Load / reload in Chrome
-
-1. Open `chrome://extensions`
-2. Developer mode ON
-3. **Remove** the old TooManyTabs if the ID is wrong, then **Load unpacked** → select `dist/`
-4. Confirm the extension ID is exactly:
-
-   `najlilhbfkkocnnhfaofffpfehcipahe`
-
-5. If the ID differs, the `key` in `manifest.json` didn’t load — reload from `dist/` again
-
----
-
-## 6. Sign in
-
-1. Click the TooManyTabs icon (opens a **tab**, not a tiny popup)
-2. Click **Sign in**
-3. In the Google window click **Allow** (do not close it)
-4. You should land signed in; sync uses your JWT via the local API
-
----
-
-## Flow (what the code does)
+## What the code does
 
 ```
-.env (GOOGLE_CLIENT_ID)
-   └─ bun run build → dist/manifest.json oauth2.client_id
+.env GOOGLE_CLIENT_ID
+  → bun run build → dist/manifest.json oauth2.client_id
 
 TooManyTabs tab
-   └─ chrome.identity.getAuthToken({ interactive: true })
-         └─ Google access token
-               └─ background → POST http://localhost:3000/auth/google { accessToken }
-                     └─ JWT + user saved in chrome.storage.local
+  → chrome.identity.getAuthToken({ interactive: true })
+      → Google access token
+          → POST /auth/google { accessToken }
+              → JWT in chrome.storage.local
 ```
+
+Chrome extensions cannot read `.env` at runtime. Rebuild after every Client ID change.
 
 ---
 
 ## Troubleshooting
 
-| Error / symptom | Fix |
-| --------------- | --- |
-| `Bad client id` | Client type must be **Chrome Extension**, Item ID = `najlilhbfkkocnnhfaofffpfehcipahe` |
-| `The user did not approve access` | Click **Allow**; add yourself as Test user; don’t close the Google window |
-| Sign-in works but sync fails | API not running — `cd server && bun run dev` |
-| Still old client ID | You didn’t rebuild, or loaded wrong folder — rebuild and load `dist/` |
-| Extension ID changed | Always load `dist/` that contains the `key` field |
-| Web client + secret | Wrong type — create a Chrome Extension client |
+| Symptom | Fix |
+| ------- | --- |
+| **Access blocked** / request invalid / Bad client id | New **Chrome Extension** client + correct Item ID; rebuild; reload `dist/` |
+| Access blocked + “verification” / not completed | Add your Gmail under **Test users** |
+| “User did not approve access” | Click **Allow**; don’t close the Google window |
+| Works in Chrome, fails in Brave | Use Chrome; Brave breaks getAuthToken |
+| Sign-in OK, sync fails | Start API: `cd server && bun run dev` → `/health` |
+| Extension ID changed | Always load `dist/` that includes `key` |
+| Still old Client ID | Forgot `bun run build` or loaded wrong folder |
+
+Verify injected ID:
+
+```bash
+grep client_id dist/manifest.json
+```
 
 ---
 
-## After it works
+## Do not use
 
-- Local groups work offline without login
-- After login, dirty groups sync every 5 minutes + on changes
-- Changing `.env` Client ID → always `bun run build` + reload extension
+| Approach | Why |
+| -------- | --- |
+| Web application client + secret for getAuthToken | Causes Access blocked / invalid_request |
+| `launchWebAuthFlow` / localhost Google redirects as primary | Not the Chrome Identity path for this app |
+| Loading `public/` or `src/` as the extension | Missing injected Client ID / wrong build |

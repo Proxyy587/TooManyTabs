@@ -1,0 +1,31 @@
+{
+  "name": "Pip",
+  "note": "Single source of truth for the mascot. 16x16 grid; '.' is transparent. scripts/make-brand.mjs turns this into the PNG icons and SVG logo; src/components/brand/Pip.tsx renders it live with moods.",
+  "palette": {
+    "K": "#1C1A27",
+    "Y": "#FFC93C",
+    "S": "#F2A922",
+    "W": "#FFF1B8",
+    "P": "#FF8AA6",
+    "B": "#6C8BFF",
+    "b": "#4C6BEF"
+  },
+  "grid": [
+    "................",
+    "......KKKKKKK...",
+    ".....KBBBBBBBK..",
+    "....KBBBBBBBBBK.",
+    "...KKKKKKKKKBBK.",
+    "..KWWYYYYYYKBBK.",
+    ".KWYYYYYYYYYKbK.",
+    ".KYYKYYYYKYYKbK.",
+    ".KYYKYYYYKYYKbK.",
+    ".KPPYYYYYYPPKbK.",
+    ".KYYYYKKYYYYKbK.",
+    ".KSYYYYYYYYSKKK.",
+    "KKSSSSSSSSSSKK..",
+    ".KKKKKKKKKKKK...",
+    "..KK......KK....",
+    "................"
+  ]
+}
