@@ -66,7 +66,7 @@ function now(): string {
 }
 
 async function storageGet<T>(keys: string[]): Promise<Partial<T>> {
-  return (await chrome.storage.local.get(keys)) as Partial<T>
+  return (await chrome.storage.local.get(keys as string[])) as unknown as Partial<T>
 }
 
 async function storageSet(data: Record<string, unknown>): Promise<void> {

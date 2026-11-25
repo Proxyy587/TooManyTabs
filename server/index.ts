@@ -44,6 +44,8 @@ app.use("/auth", authRoutes);
 app.use("/sync", syncRoutes);
 app.use("/device", deviceRoutes);
 
+// Express recognises error handlers by their four parameters.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("[server] Unhandled error:", err);
   res.status(500).json({ message: "Internal server error" });

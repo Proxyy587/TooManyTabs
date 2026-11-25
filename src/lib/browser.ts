@@ -88,7 +88,7 @@ export function watchBrowser(cb: () => void): () => void {
     clearTimeout(timer)
     timer = setTimeout(cb, 150)
   }
-  const onUpdated = (_id: number, info: chrome.tabs.TabChangeInfo) => {
+  const onUpdated = (_id: number, info: chrome.tabs.OnUpdatedInfo) => {
     if (info.url || info.title || info.status === "complete" || info.favIconUrl || info.discarded !== undefined || info.audible !== undefined || info.pinned !== undefined) fire()
   }
   const tabEvents = [chrome.tabs.onCreated, chrome.tabs.onRemoved, chrome.tabs.onActivated, chrome.tabs.onAttached, chrome.tabs.onReplaced]
@@ -108,7 +108,7 @@ export function watchBrowser(cb: () => void): () => void {
 /** Favicon via the browser's own cache (MV3 "favicon" permission); no network request to the site. */
 export function faviconFor(pageUrl: string, size = 32): string | null {
   try {
-    if (!chrome.runtime?.id) return null
+    if (location.protocol !== "chrome-extension:" || !chrome.runtime?.id) return null
     const u = new URL(chrome.runtime.getURL("/_favicon/"))
     u.searchParams.set("pageUrl", pageUrl)
     u.searchParams.set("size", String(size))
