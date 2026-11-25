@@ -4,16 +4,13 @@
 
 ### Added
 - **Six themes** (Pip, Dusk, Mint, Peach, Sky, Bubblegum), each in light and dark, switchable from the sidebar, Settings → Look or ⌘K
-- **Sidebar** on wide screens: brand card, views, shelves, tab-level meter, theme swatches, Pip's landscape
-- Row **density** (Cozy / Compact) and a switch for the landscape
-- Pixel sprites and scenery (`src/components/brand/Sprite.tsx`)
+- Row **density** (Cozy / Compact)
 - Settings rebuilt as a side-nav layout with live theme previews
 
 ### Changed
 - Stair-stepped pixel corners, hard shadows and chunky buttons everywhere; no more capsules
-- Pixel headings for the page, shelves and settings
-- Shelves are cards; "open twice" and "playing" show as chips; Pip delivers the one suggestion
-- Empty states fill the space with Pip and a landscape
+- Pixel headings for shelves and settings; layout stays one minimal column
+- "Open twice" and "playing" show as chips
 
 ### Fixed
 - Keyboard focus ring always shows on buttons, tabs and rows

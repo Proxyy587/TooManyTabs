@@ -49,8 +49,6 @@ export interface AppPrefs {
   /** colour theme; light/dark comes from themeMode */
   palette: PaletteId
   density: Density
-  /** the little pixel landscape under the sidebar */
-  scenery: boolean
   closeOnPark: boolean
   onboardingDismissed: boolean
   /** open tabs untouched for this many days count as "dusty" */
@@ -63,14 +61,13 @@ export const DEFAULT_PREFS: AppPrefs = {
   themeMode: "system",
   palette: "pip",
   density: "cozy",
-  scenery: true,
   closeOnPark: false,
   onboardingDismissed: false,
   staleDays: 3,
   categoryRules: {},
 }
 
-export const PREF_KEYS = ["themeMode", "palette", "density", "scenery", "closeOnPark", "onboardingDismissed", "staleDays", "categoryRules"] as const
+export const PREF_KEYS = ["themeMode", "palette", "density", "closeOnPark", "onboardingDismissed", "staleDays", "categoryRules"] as const
 
 function now(): string {
   return new Date().toISOString()
@@ -395,7 +392,6 @@ export async function getPrefs(): Promise<AppPrefs> {
     themeMode: raw.themeMode === "dark" || raw.themeMode === "light" ? raw.themeMode : "system",
     palette: PALETTE_IDS.find((id) => id === raw.palette) ?? DEFAULT_PREFS.palette,
     density: raw.density === "compact" ? "compact" : "cozy",
-    scenery: raw.scenery !== false,
     closeOnPark: raw.closeOnPark === true,
     onboardingDismissed: raw.onboardingDismissed === true,
     staleDays: [1, 3, 7, 14].includes(staleDays) ? staleDays : DEFAULT_PREFS.staleDays,

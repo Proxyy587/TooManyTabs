@@ -105,7 +105,7 @@ export const Row = memo(function Row({
             actions.activate(item)
           }
         }}
-        className={`group pix-s [--pc:transparent] grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-2.5 outline-none hover:[--pc:var(--panel-hover)] has-[[data-state=open]]:[--pc:var(--panel-hover)] focus-visible:[--pc:var(--panel-hover)] ${compact ? "py-1" : "py-2"}`}
+        className={`group pix-s [--pc:transparent] grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-2.5 outline-none hover:[--pc:var(--raised)] has-[[data-state=open]]:[--pc:var(--raised)] focus-visible:[--pc:var(--raised)] ${compact ? "py-1" : "py-2"}`}
       >
         <Favicon url={item.url} host={item.host} fallbackSrc={item.favIconUrl} small={compact} />
         <div className="min-w-0">

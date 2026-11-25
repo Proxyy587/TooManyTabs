@@ -324,9 +324,6 @@
     line-height: 1.45;
     color: var(--ink);
     background-color: var(--ground);
-    /* a faint pixel-dot grid, so the page reads as a sheet of graph paper */
-    background-image: radial-gradient(circle at 1px 1px, var(--grid) 1px, transparent 1.2px);
-    background-size: 16px 16px;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }

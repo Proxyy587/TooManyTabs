@@ -272,9 +272,6 @@ export function SettingsDialog({
                       </TabsList>
                     </Tabs>
                   </Field>
-                  <Field label="Pip's world" hint="The little landscape under the sidebar.">
-                    <Switch checked={prefs.scenery} onCheckedChange={(v) => onPrefs({ scenery: v })} aria-label="Show Pip's world" />
-                  </Field>
                 </div>
               </Group>
             </TabsContent>

@@ -40,7 +40,7 @@ Tokens (all in `src/index.css`; `src/lib/palettes.ts` mirrors the raw colours fo
 
 | Token | Use |
 |---|---|
-| `ground` | the page (with a faint pixel-dot grid) |
+| `ground` | the page |
 | `panel` / `panel-hover` | cards and rows on hover (white-ish in light, `raised` in dark) |
 | `raised`, `raised-2` | fields, tracks, chips |
 | `float` | menus, dialogs, the selected segment |
@@ -72,18 +72,14 @@ Tokens (all in `src/index.css`; `src/lib/palettes.ts` mirrors the raw colours fo
 Everything is built from a few pixel ideas, so it feels like one little game world and not a flat web page.
 
 - **Stair-step corners.** A surface is a tone plus four hard box-shadows in its own colour (`.pix` 4px, `.pix-m` 3px, `.pix-s` 2px, set per surface with `--pc`). No radius, no border. Sibling gaps must be larger than the notch.
-- **Hard shadows.** Floating things (`.pix-float`) and cards (`.pix-card`) drop a hard, un-blurred shadow that follows the notch.
+- **Hard shadows.** Floating things (`.pix-float`) drop a hard, un-blurred shadow that follows the notch.
 - **Chunky buttons.** `.pix-btn` has a coloured lip. The primary ink button's lip is the palette's brand colour. Pressing drops the face 2px and squashes the lip.
 - **Pixel font** (Pixelify Sans, `font-display`): the wordmark, page and section titles, the settings pane titles, counts in the meter, empty-state headlines. Never body text or buttons.
-- **Sprites** (`src/components/brand/Sprite.tsx`): tiny text-grid pixel art in theme colours. One-colour `nav*` sprites are icons that take the text colour; the rest (window, stack, moon, star, heart, cloud, spark) are decoration.
-- **Pip's world** (`Scene`): a 48×14-cell landscape that sits under the sidebar at exactly 6px per cell, and runs as a mirrored strip in empty states. It can be switched off in Settings.
-- **The tab level meter**: 16 chunky cells and a one-word mood (all clear, calm, cozy, busy, too many, way too many).
+- **Sprites** (`src/components/brand/Sprite.tsx`): tiny text-grid pixel icons for the Settings nav, in theme colours.
 - Pixel UI moves in whole pixels: steps, not glides.
 
 ## Layout
-- **From 1024px:** a 288px sidebar (brand card, the one primary button, All / Open now / Saved, shelves, tab level, theme swatches, Commands, mode, Settings, the landscape) and a main column up to 920px with a search field, a pixel-font page title, Pip's suggestion, then each shelf as a card.
-- **Below 1024px:** one column. The sidebar collapses into a header with search, a segmented view switch and a shelf select.
-- Density (Cozy or Compact) only changes rows.
+Deliberately minimal: one centred column (max 720px). Header (Pip, wordmark, ⌘K, settings, the one "Save tabs" button), search, a segmented All / Open now / Saved switch with a shelf select, Pip's one suggestion, then plain rows grouped under small pixel-font shelf titles. No sidebar, no cards, no scenery, no dot grid. Themes live in Settings → Look and ⌘K.
 
 ## Shape and motion
 - **Radius:** none. Corners are stair-stepped (see above). The old 6 / 8 / 12 / 14 ladder is gone.

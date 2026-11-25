@@ -126,8 +126,6 @@ export default function App() {
           pipMood={pipMood}
           cheer={cheer}
           prefs={prefs}
-          onPrefs={updatePrefs}
-          dark={dark}
         />
       </main>
 
