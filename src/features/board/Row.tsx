@@ -1,5 +1,5 @@
 import { memo } from "react"
-import { ArrowUpRight, BookmarkPlus, Copy, FolderInput, MoreHorizontal, SquareArrowOutUpRight, Trash2, X } from "lucide-react"
+import { ArrowUpRight, BookmarkPlus, Check, Copy, Tag, FolderInput, MoreHorizontal, SquareArrowOutUpRight, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -23,6 +23,7 @@ export type RowActions = {
   move: (it: Item, shelfId: string) => void
   openInNewWindow: (it: Item) => void
   copy: (it: Item) => void
+  file: (it: Item, category: string | null) => void
 }
 
 function IconAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
@@ -78,6 +79,8 @@ export const Row = memo(function Row({
   actions,
   animate,
   compact,
+  fileOptions,
+  ruled,
 }: {
   item: Item
   shelves: TabGroup[]
@@ -85,6 +88,8 @@ export const Row = memo(function Row({
   actions: RowActions
   animate: boolean
   compact: boolean
+  fileOptions: { id: string; label: string }[]
+  ruled: boolean
 }) {
   const isOpen = item.source === "open"
   const fact = isOpen ? openFact(item, now) : null
@@ -208,6 +213,27 @@ export const Row = memo(function Row({
               <DropdownMenuItem onSelect={() => actions.copy(item)}>
                 <Copy /> Copy link
               </DropdownMenuItem>
+              {item.host ? (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Tag /> File site under…
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="max-h-72 w-52">
+                    {fileOptions.map((c) => (
+                      <DropdownMenuItem key={c.id} onSelect={() => actions.file(item, c.id)}>
+                        <span className="truncate">{c.label}</span>
+                        {item.category === c.id ? <Check className="ml-auto" /> : null}
+                      </DropdownMenuItem>
+                    ))}
+                    {ruled ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => actions.file(item, null)}>Sort automatically</DropdownMenuItem>
+                      </>
+                    ) : null}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              ) : null}
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onSelect={() => actions.remove(item)}>
                 {isOpen ? <X /> : <Trash2 />} {isOpen ? "Close tab" : "Remove"}

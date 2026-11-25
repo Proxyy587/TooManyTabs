@@ -1,4 +1,4 @@
-# Features (0.3 Shelf Revamp)
+# Features
 
 See [docs/PRODUCT.md](./docs/PRODUCT.md) and [docs/CHANGELOG.md](./docs/CHANGELOG.md) for the source of truth.
 
@@ -17,7 +17,10 @@ See [docs/PRODUCT.md](./docs/PRODUCT.md) and [docs/CHANGELOG.md](./docs/CHANGELO
 - Search (⌘/Ctrl+K)
 - List / grid views
 - Duplicate open-tab cleanup
-- Sort by site (domain grouping)
+- Smart filters: Twins, Dusty, Safe to close, categories and your own categories
+- "File site under…" to sort a site your way
+- Insights panel with one-click clean-up
+- Six themes, light and dark
 - Local-first storage
 - Optional Google sync + sync status chip
 - Settings (appearance, behavior, account, export/import)
@@ -26,4 +29,4 @@ See [docs/PRODUCT.md](./docs/PRODUCT.md) and [docs/CHANGELOG.md](./docs/CHANGELO
 
 ## Not included
 
-Tags, notes, AI summaries, side panel, new-tab page, multi-window park, collaboration
+Tags, notes, model-based filters, side panel, new-tab page, multi-window park, collaboration

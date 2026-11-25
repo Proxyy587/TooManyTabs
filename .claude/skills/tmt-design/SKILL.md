@@ -38,13 +38,13 @@ A minimal page with a pixel soul. Pip lives in it, the user picks the weather (a
 ## Components (shadcn/ui in `src/components/ui`, already restyled)
 - Use `Button`, `Input`, `Dialog`, `DropdownMenu`, `Select`, `Tabs` (also the segmented control and the settings side nav), `Switch`, `Tooltip`, `CommandDialog` and `sonner` toasts.
 - Don't hand-roll menus, popovers or modals.
-- **Layout: stay minimal.** One centred column (max 720px). No sidebar, cards, scenery, hero titles or meters unless the owner asks.
+- **Layout: stay minimal.** One centred column (max 720px); from 1280px a slim insights panel on the right (Settings can turn it off). No sidebar, cards on the main list, scenery, hero titles or meters unless the owner asks.
 - **Row anatomy (`features/board/Row.tsx`):**
   - favicon tile · title (once) · domain (once) + at most one fact;
   - notable facts ("open twice", "playing", "current tab") are chips; the rest is quiet text;
   - actions sit in their own grid column; with a mouse they show on hover/focus; on touch they always show;
   - never position menus absolutely inside a row.
-- **Filters:** All / Open now / Saved plus the shelf select. No chip rows.
+- **Filters:** the All / Open now / Saved switch, the shelf select on its right ("Every shelf"), then ONE row of smart-filter chips (Twins, Dusty, Safe to close | categories | + Category). Chips are `pix-s`, selected = `brand` fill. A built-in category chip only exists when it spans 2+ sites; your own always show. Flag chips never disappear when other filters narrow (they dim).
 
 ## Motion
 | Kind | Feel |

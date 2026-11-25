@@ -4,13 +4,14 @@
  * URL and title; nothing is sent anywhere.
  *
  * Order of evidence (first match wins):
- *   1. your own rules ("always file example.com under Work")
- *   2. local/dev hosts (localhost, 127.0.0.1, *.local, *.test)
- *   3. known hosts, most specific first (music.youtube.com before youtube.com)
- *   4. subdomain hints (docs., blog., shop.…)
- *   5. path hints (/docs/, /blog/, /cart…)
- *   6. title hints ("5 min read", "API reference"…)
- *   7. Other
+ *   1. your own site rules ("always file example.com under Work")
+ *   2. your own categories: sites and keywords you listed
+ *   3. local/dev hosts (localhost, 127.0.0.1, *.local, *.test)
+ *   4. known hosts, most specific first (music.youtube.com before youtube.com)
+ *   5. subdomain hints (docs., blog., shop.…)
+ *   6. path hints (/docs/, /blog/, /cart…)
+ *   7. title hints ("5 min read", "API reference"…)
+ *   8. Other
  */
 
 export type CategoryId =
@@ -348,10 +349,77 @@ const TITLE_HINTS: Array<[RegExp, CategoryId]> = [
 
 const LOCAL_HOST = /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|\[::1\]|.+\.(local|test|localhost|internal))$/i
 
-export type CategoryRules = Record<string, CategoryId>
+/** A category the user made: a name plus the sites and words that belong in it. */
+export type CustomCategory = {
+  /** "c-" + a short random string; stable across renames */
+  id: string
+  label: string
+  /** hosts (no www.); each also covers its subdomains */
+  sites: string[]
+  /** lowercase words matched against the title and URL */
+  words: string[]
+}
+
+/** A built-in id, or the id of a custom category. */
+export type CategoryKey = string
+
+export const MAX_CUSTOM = 12
+const CUSTOM_ID = /^c-[a-z0-9]{3,12}$/
+
+export function isCustomId(v: unknown): v is string {
+  return typeof v === "string" && CUSTOM_ID.test(v)
+}
+
+export function newCustomId(): string {
+  return `c-${Math.random().toString(36).slice(2, 8).padEnd(6, "0")}`
+}
+
+/** site rules map a host to a built-in id or a custom id */
+export type CategoryRules = Record<string, CategoryKey>
+
+/** Clean a typed site ("https://www.GitHub.com/x") into a bare host, or "" if it isn't one. */
+export function cleanSite(raw: string): string {
+  const t = raw.trim().toLowerCase()
+  if (!t) return ""
+  let host = t
+  try {
+    host = new URL(/^[a-z]+:\/\//.test(t) ? t : `https://${t}`).hostname
+  } catch {
+    return ""
+  }
+  host = host.replace(/^www\./, "")
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host) ? host : ""
+}
+
+export function cleanWord(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 32)
+}
+
+/** Validate whatever came out of storage or an import. Never throws. */
+export function sanitizeCustom(raw: unknown): CustomCategory[] {
+  if (!Array.isArray(raw)) return []
+  const out: CustomCategory[] = []
+  const seen = new Set<string>()
+  for (const r of raw) {
+    if (out.length >= MAX_CUSTOM || !r || typeof r !== "object") continue
+    const { id, label, sites, words } = r as Record<string, unknown>
+    if (!isCustomId(id) || seen.has(id) || typeof label !== "string") continue
+    const name = label.trim().slice(0, 24)
+    if (!name) continue
+    const list = <T,>(v: unknown, f: (x: string) => T, max: number) =>
+      Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string").map(f).filter(Boolean))].slice(0, max) : []
+    seen.add(id)
+    out.push({ id, label: name, sites: list(sites, cleanSite, 30), words: list(words, cleanWord, 12) as string[] })
+  }
+  return out
+}
+
+export function categoryLabel(id: CategoryKey, custom: CustomCategory[] = []): string {
+  return custom.find((c) => c.id === id)?.label ?? CATEGORY_BY_ID[id as CategoryId]?.label ?? "Other"
+}
 
 export type Classification = {
-  category: CategoryId
+  category: CategoryKey
   via: "custom" | "local" | "host" | "subdomain" | "path" | "title" | "fallback"
 }
 
@@ -374,7 +442,7 @@ export function hostChain(host: string): string[] {
   return out
 }
 
-export function classify(url: string, title = "", rules: CategoryRules = {}): Classification {
+export function classify(url: string, title = "", rules: CategoryRules = {}, custom: CustomCategory[] = []): Classification {
   let u: URL
   try {
     u = new URL(url)
@@ -388,8 +456,16 @@ export function classify(url: string, title = "", rules: CategoryRules = {}): Cl
   const chain = hostChain(host)
 
   for (const h of chain) {
-    const custom = rules[h]
-    if (custom && isCategoryId(custom)) return { category: custom, via: "custom" }
+    const rule = rules[h]
+    if (rule && (isCategoryId(rule) || custom.some((c) => c.id === rule))) return { category: rule, via: "custom" }
+  }
+  if (custom.length) {
+    const hay = `${title} ${u.href}`.toLowerCase()
+    for (const c of custom) {
+      if (c.sites.some((site) => chain.includes(site)) || c.words.some((w) => hay.includes(w))) {
+        return { category: c.id, via: "custom" }
+      }
+    }
   }
 
   if (LOCAL_HOST.test(host) || u.port === "3000" || u.port === "5173" || u.port === "8080") {

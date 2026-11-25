@@ -2,6 +2,8 @@
 
 ![Pip](./screenshots/pip.png)
 
+**Positioning:** *Tabs, sorted.* A tidy desk that tidies itself, not a filing cabinet you maintain. The name stays.
+
 **The idea:** a little pixel world for your tabs. Pip lives in it, the user picks the weather (a palette), and the page is built from stair-stepped tones, chunky buttons and tiny sprites. It is playful but never noisy: one primary button, plain readable rows, nothing looping.
 
 ## Name: keep **TooManyTabs**
@@ -79,7 +81,7 @@ Everything is built from a few pixel ideas, so it feels like one little game wor
 - Pixel UI moves in whole pixels: steps, not glides.
 
 ## Layout
-Deliberately minimal: one centred column (max 720px). Header (Pip, wordmark, ⌘K, settings, the one "Save tabs" button), search, a segmented All / Open now / Saved switch with a shelf select, Pip's one suggestion, then plain rows grouped under small pixel-font shelf titles. No sidebar, no cards, no scenery, no dot grid. Themes live in Settings → Look and ⌘K.
+Deliberately minimal: one centred column (max 720px), plus a slim insights panel on screens 1280px and wider (switch it off in Settings → Look). Header (Pip, wordmark, ⌘K, settings, the one "Save tabs" button), search, a segmented All / Open now / Saved switch with a shelf select, Pip's one suggestion, then plain rows grouped under small pixel-font shelf titles. No sidebar, no cards, no scenery, no dot grid. Themes live in Settings → Look and ⌘K.
 
 ## Shape and motion
 - **Radius:** none. Corners are stair-stepped (see above). The old 6 / 8 / 12 / 14 ladder is gone.

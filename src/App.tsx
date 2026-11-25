@@ -5,9 +5,12 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import type { PipMood } from "@/components/brand/Pip"
 import { Board, type View } from "@/features/board/Board"
 import { CommandPalette } from "@/features/board/CommandPalette"
+import { CategoryDialog } from "@/features/board/CategoryDialog"
 import { SaveDialog } from "@/features/board/SaveDialog"
 import { SettingsDialog, type SettingsTab } from "@/features/settings/SettingsDialog"
 import { useTabsData } from "@/hooks/useTabsData"
+import { saveCustomCategories, setCategoryRule } from "@/lib/api"
+import type { CustomCategory } from "@/lib/categories"
 import { closeTabs, focusTab, openUrls } from "@/lib/browser"
 import { duplicateTabsToClose, type Item } from "@/lib/items"
 
@@ -37,6 +40,7 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("look")
+  const [editing, setEditing] = useState<{ open: boolean; cat: CustomCategory | null }>({ open: false, cat: null })
   const [pipMood, setPipMood] = useState<PipMood>("idle")
   const searchRef = useRef<HTMLInputElement>(null)
   const moodTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -59,6 +63,19 @@ export default function App() {
     setPipMood("happy")
     moodTimer.current = setTimeout(() => setPipMood(restingMood), 1400)
   }, [restingMood])
+
+  const editCategory = useCallback((cat: CustomCategory | null) => setEditing({ open: true, cat }), [])
+  const saveCategory = async (c: CustomCategory) => {
+    const list = prefs.customCategories
+    await saveCustomCategories(list.some((x) => x.id === c.id) ? list.map((x) => (x.id === c.id ? c : x)) : [...list, c])
+    setEditing({ open: false, cat: null })
+    toast(`Saved ${c.label}`)
+  }
+  const deleteCategory = async (c: CustomCategory) => {
+    await saveCustomCategories(prefs.customCategories.filter((x) => x.id !== c.id))
+    setEditing({ open: false, cat: null })
+    toast(`Deleted ${c.label}`, { action: { label: "Undo", onClick: () => saveCustomCategories(prefs.customCategories) } })
+  }
 
   const openSettings = useCallback((tab: SettingsTab = "look") => {
     setSettingsTab(tab)
@@ -126,6 +143,7 @@ export default function App() {
           pipMood={pipMood}
           cheer={cheer}
           prefs={prefs}
+          onNewCategory={() => editCategory(null)}
         />
       </main>
 
@@ -163,6 +181,17 @@ export default function App() {
         user={data.user}
         sync={data.sync}
         dark={dark}
+        onEditCategory={editCategory}
+        onForgetSite={(host) => setCategoryRule(host, null)}
+      />
+      <CategoryDialog
+        open={editing.open}
+        onOpenChange={(o) => setEditing((e) => ({ ...e, open: o }))}
+        initial={editing.cat}
+        items={items}
+        taken={prefs.customCategories.map((c) => c.label.toLowerCase())}
+        onSave={saveCategory}
+        onDelete={deleteCategory}
       />
       <Toaster theme={dark ? "dark" : "light"} />
     </TooltipProvider>

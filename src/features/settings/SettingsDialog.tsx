@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { toast } from "sonner"
-import { Check, Copy, Download, LogOut, Monitor, Moon, RefreshCw, Sun, Upload } from "lucide-react"
+import { Check, Copy, Plus, X, Download, LogOut, Monitor, Moon, RefreshCw, Sun, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Pip } from "@/components/brand/Pip"
 import { Sprite, type SpriteName } from "@/components/brand/Sprite"
 import { PALETTES } from "@/lib/palettes"
+import { categoryLabel, type CustomCategory } from "@/lib/categories"
 import { cn } from "@/lib/utils"
 import {
   exportGroupsJson,
@@ -26,7 +27,7 @@ import {
 import { authAvailability } from "@/lib/auth"
 import type { SyncInfo } from "@/hooks/useTabsData"
 
-export type SettingsTab = "look" | "general" | "sync" | "data" | "keys" | "about"
+export type SettingsTab = "look" | "categories" | "general" | "sync" | "data" | "keys" | "about"
 
 const SHORTCUTS: [string, string][] = [
   ["⌘K / Ctrl K", "Command menu: jump to any tab or run an action"],
@@ -44,6 +45,7 @@ const SHORTCUTS: [string, string][] = [
 
 const PANES: { id: SettingsTab; label: string; icon: SpriteName; title: string; blurb: string }[] = [
   { id: "look", label: "Look", icon: "navSpark", title: "look", blurb: "Pick a theme and how busy the page feels." },
+  { id: "categories", label: "Categories", icon: "navStack", title: "categories", blurb: "Sort tabs your way. Your categories come first." },
   { id: "general", label: "Tabs", icon: "navOpen", title: "tabs", blurb: "How saving and snoozing behave." },
   { id: "sync", label: "Sync", icon: "navMoon", title: "sync", blurb: "Keep your shelves in step between browsers." },
   { id: "data", label: "Backup", icon: "navStack", title: "backup", blurb: "Your shelves are yours. Take a copy any time." },
@@ -124,6 +126,8 @@ export function SettingsDialog({
   user,
   sync,
   dark,
+  onEditCategory,
+  onForgetSite,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
@@ -134,6 +138,8 @@ export function SettingsDialog({
   user: AuthUser | null
   sync: SyncInfo
   dark: boolean
+  onEditCategory: (c: CustomCategory | null) => void
+  onForgetSite: (host: string) => void
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState<null | "login" | "sync">(null)
@@ -264,6 +270,9 @@ export function SettingsDialog({
               </Group>
               <Group title="page">
                 <div className="grid gap-3">
+                  <Field label="Side panel" hint="What needs attention and where your tabs go, on wide screens.">
+                    <Switch checked={prefs.insights} onCheckedChange={(v) => onPrefs({ insights: v })} aria-label="Show the side panel" />
+                  </Field>
                   <Field label="Row density" hint="Compact fits more tabs on screen.">
                     <Tabs value={prefs.density} onValueChange={(v) => onPrefs({ density: v as Density })} className="gap-0">
                       <TabsList aria-label="Row density" className={track}>
@@ -274,6 +283,58 @@ export function SettingsDialog({
                   </Field>
                 </div>
               </Group>
+            </TabsContent>
+
+            <TabsContent value="categories" className="grid gap-8">
+              <Group title="your categories">
+                <div className="grid gap-2">
+                  {prefs.customCategories.length === 0 ? (
+                    <p className="px-0.5 text-[14px] text-ink-2">
+                      Nothing yet. Make one for a trip, a project or a client, and add the sites and words that belong in it.
+                    </p>
+                  ) : (
+                    prefs.customCategories.map((c) => (
+                      <div key={c.id} className="pix-s [--pc:var(--raised)] mx-0.5 flex items-center justify-between gap-3 px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-[15px] font-medium text-ink">{c.label}</p>
+                          <p className="truncate text-[13px] text-ink-2">
+                            {[c.sites.length ? `${c.sites.length} ${c.sites.length === 1 ? "site" : "sites"}` : "", c.words.length ? `${c.words.length} ${c.words.length === 1 ? "word" : "words"}` : ""]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                        <Button variant="secondary" size="sm" onClick={() => onEditCategory(c)}>
+                          Edit
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                  <Button className="mt-1 w-fit" onClick={() => onEditCategory(null)} disabled={prefs.customCategories.length >= 12}>
+                    <Plus /> New category
+                  </Button>
+                </div>
+              </Group>
+              <Group title="sites you sorted">
+                {Object.keys(prefs.categoryRules).length === 0 ? (
+                  <p className="px-0.5 text-[14px] text-ink-2">Open a tab's menu and pick "File … under" to always sort a site your way.</p>
+                ) : (
+                  <ul className="grid gap-1.5 px-0.5">
+                    {Object.entries(prefs.categoryRules)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([host, cat]) => (
+                        <li key={host} className="pix-s [--pc:var(--raised)] flex items-center justify-between gap-3 px-3 py-1.5 text-[14px]">
+                          <span className="min-w-0 truncate">
+                            <span className="text-ink">{host}</span> <span className="text-ink-3">→</span> <span className="text-ink-2">{categoryLabel(cat, prefs.customCategories)}</span>
+                          </span>
+                          <Button variant="ghost" size="icon-xs" aria-label={`Stop filing ${host}`} onClick={() => onForgetSite(host)}>
+                            <X />
+                          </Button>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </Group>
+              <p className="text-[13px] text-ink-3">Sorting happens on this device. Page titles and addresses are never sent anywhere.</p>
             </TabsContent>
 
             <TabsContent value="general" className="grid gap-3">
@@ -412,8 +473,7 @@ export function SettingsDialog({
                 </div>
               </div>
               <p className="text-[14px] text-ink-2">
-                Every tab you have open or saved, on one page. Your tabs stay on this device unless you sign in to sync. Pip is the
-                little tab that keeps the others.
+                Tabs, sorted. Every tab you have open or saved on one page that files itself. Your tabs stay on this device unless you sign in to sync. Pip is the little tab that keeps the others.
               </p>
               <p className="text-[13px] text-ink-3">
                 Fonts: Pixelify Sans and Atkinson Hyperlegible Next, both under the SIL Open Font License. Interface built on Radix and

@@ -22,12 +22,26 @@ import {
   removeSavedTab,
   renameGroup,
   restoreGroup,
+  setCategoryRule,
   togglePin,
   type AppPrefs,
   type TabGroup,
 } from "@/lib/api"
 import { closeTabs, focusTab, openUrls, snoozeTabs } from "@/lib/browser"
-import { duplicateTabsToClose, queryTerms, type Item } from "@/lib/items"
+import { CATEGORIES } from "@/lib/categories"
+import {
+  applyFilters,
+  duplicateTabsToClose,
+  facetCounts,
+  keptTabsToClose,
+  shelfToMarkdown,
+  smartCategories,
+  type Filters,
+  type Flag,
+  type Item,
+} from "@/lib/items"
+import { Insights } from "./Insights"
+import { SmartFilters } from "./SmartFilters"
 import { Row, type RowActions } from "./Row"
 import { RenameDialog } from "./RenameDialog"
 
@@ -38,12 +52,6 @@ type Section = {
   title: string
   items: Item[]
   shelf?: TabGroup
-}
-
-function matchesQuery(it: Item, terms: string[]) {
-  if (!terms.length) return true
-  const hay = `${it.title} ${it.url} ${it.groupName || ""}`.toLowerCase()
-  return terms.every((t) => hay.includes(t))
 }
 
 export function Board({
@@ -59,6 +67,7 @@ export function Board({
   pipMood,
   cheer,
   prefs,
+  onNewCategory,
 }: {
   items: Item[]
   shelves: TabGroup[]
@@ -71,10 +80,13 @@ export function Board({
   setView: (v: View) => void
   pipMood: PipMood
   cheer: () => void
-  prefs: Pick<AppPrefs, "density">
+  prefs: Pick<AppPrefs, "density" | "insights" | "staleDays" | "customCategories" | "categoryRules">
+  onNewCategory: () => void
 }) {
   const [query, setQuery] = useState("")
   const [shelfFilter, setShelfFilter] = useState<string>("any")
+  const [cats, setCats] = useState<string[]>([])
+  const [flags, setFlags] = useState<Flag[]>([])
   const [renaming, setRenaming] = useState<TabGroup | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   // rows animate in only on first paint, not on every filter keystroke
@@ -95,33 +107,47 @@ export function Board({
   const dusty = useMemo(() => openItems.filter((i) => i.stale && !i.discarded), [openItems])
   const windowIds = useMemo(() => [...new Set(openItems.map((i) => i.windowId))], [openItems])
 
-  const terms = queryTerms(query)
+  const custom = prefs.customCategories
+  const filters: Filters = useMemo(
+    () => ({ sources: view === "all" ? [] : [view], categories: cats, flags, shelf: shelfFilter === "any" ? null : shelfFilter, query }),
+    [view, cats, flags, shelfFilter, query]
+  )
+  const filtered = useMemo(() => applyFilters(items, filters), [items, filters])
+  const counts2 = useMemo(() => facetCounts(items, filters), [items, filters])
+  const allCounts = useMemo(() => facetCounts(items, { sources: [], categories: [], flags: [], shelf: null, query: "" }), [items])
+  const smart = useMemo(() => smartCategories(items, custom), [items, custom])
+  // a category that disappeared (renamed away, deleted, or its sites moved) can't stay selected
+  useEffect(() => {
+    if (cats.some((c) => !smart.some((s) => s.id === c))) setCats((cur) => cur.filter((c) => smart.some((s) => s.id === c)))
+  }, [smart, cats])
+  const narrowed = cats.length > 0 || flags.length > 0
+  const keptIds = useMemo(() => keptTabsToClose(items), [items])
+
   const sections: Section[] = useMemo(() => {
     const out: Section[] = []
+    const open = filtered.filter((i) => i.source === "open")
+    const saved = filtered.filter((i) => i.source === "saved")
     if (view !== "saved" && shelfFilter === "any") {
-      const visible = openItems.filter((i) => matchesQuery(i, terms))
       if (windowIds.length > 1) {
         windowIds.forEach((w, n) => {
-          const inWin = visible.filter((i) => i.windowId === w)
+          const inWin = open.filter((i) => i.windowId === w)
           if (inWin.length) out.push({ id: `win-${w}`, title: `Open now · window ${n + 1}`, items: inWin })
         })
-      } else if (visible.length) {
-        out.push({ id: "open", title: "Open now", items: visible })
+      } else if (open.length) {
+        out.push({ id: "open", title: "Open now", items: open })
       }
     }
     if (view !== "open") {
       for (const shelf of shelves) {
         if (shelfFilter !== "any" && shelf.id !== shelfFilter) continue
-        const inShelf = savedItems.filter((i) => i.groupId === shelf.id && matchesQuery(i, terms))
-        if (inShelf.length || (!terms.length && shelf.id === shelfFilter)) {
+        const inShelf = saved.filter((i) => i.groupId === shelf.id)
+        if (inShelf.length || (!query.trim() && !narrowed && shelf.id === shelfFilter)) {
           out.push({ id: shelf.id, title: shelf.name, items: inShelf, shelf })
         }
       }
     }
     return out
-    // terms is derived from query
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, shelfFilter, openItems, savedItems, shelves, windowIds, query])
+  }, [filtered, view, shelfFilter, shelves, windowIds, query, narrowed])
 
   const shownCount = sections.reduce((n, s) => n + s.items.length, 0)
 
@@ -156,6 +182,12 @@ export function Board({
         if (ok) toast(`Moved to ${shelves.find((s) => s.id === shelfId)?.name}`)
       },
       openInNewWindow: (it) => openUrls([it.url], { newWindow: true }),
+      file: async (it, key) => {
+        if (!it.host) return
+        await setCategoryRule(it.host, key)
+        const label = key ? [...CATEGORIES, ...custom].find((c) => c.id === key)?.label : null
+        toast(label ? `Anything from ${it.host} now goes in ${label}` : `${it.host} is sorted automatically again`)
+      },
       copy: async (it) => {
         try {
           await navigator.clipboard.writeText(it.url)
@@ -165,7 +197,7 @@ export function Board({
         }
       },
     }),
-    [shelves, cheer]
+    [shelves, cheer, custom]
   )
 
   const closeTwins = async () => {
@@ -173,6 +205,22 @@ export function Board({
     await closeTabs(twins)
     cheer()
     toast(`Closed ${n} duplicate ${n === 1 ? "tab" : "tabs"}`)
+  }
+
+  const closeKept = async () => {
+    const n = keptIds.length
+    await closeTabs(keptIds)
+    cheer()
+    toast(`Closed ${n} ${n === 1 ? "tab" : "tabs"} that ${n === 1 ? "was" : "were"} already saved`)
+  }
+
+  const copyShelf = async (name: string, list: Item[]) => {
+    try {
+      await navigator.clipboard.writeText(shelfToMarkdown(name, list))
+      toast(`Copied ${name} as a list`)
+    } catch {
+      toast("Couldn't copy")
+    }
   }
 
   const snoozeDusty = async () => {
@@ -240,10 +288,22 @@ export function Board({
     setView(v)
     setShelfFilter("any")
   }
+  const toggleCat = (id: string) => setCats((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]))
+  const toggleFlag = (f: Flag) => setFlags((c) => (c.includes(f) ? c.filter((x) => x !== f) : [...c, f]))
+  const clearSmart = () => {
+    setCats([])
+    setFlags([])
+  }
+  const fileOptions = useMemo(
+    () => [...custom.map((c) => ({ id: c.id, label: c.label })), ...CATEGORIES.filter((c) => c.id !== "other").map((c) => ({ id: c.id, label: c.label }))],
+    [custom]
+  )
+  const showRail = prefs.insights
   const compact = prefs.density === "compact"
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-24 sm:px-6">
+    <div className={`mx-auto w-full px-4 pb-24 sm:px-6 ${showRail ? "max-w-3xl xl:flex xl:max-w-[1080px] xl:gap-10" : "max-w-3xl"}`}>
+      <div className="flex min-w-0 flex-1 flex-col">
       <header className="flex items-center gap-3 pt-5 pb-4 sm:pt-8">
         <button type="button" onClick={cheer} aria-label="toomanytabs" className={`cursor-pointer outline-none ${pipMood === "happy" ? "pip-hop" : ""}`}>
           <Pip mood={pipMood} size={44} />
@@ -306,7 +366,7 @@ export function Board({
             <kbd className="pointer-events-none absolute top-1/2 right-3 hidden -translate-y-1/2 font-display text-xs text-ink-3 sm:block">/</kbd>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <Tabs value={view} onValueChange={(v) => onNav(v as View)} className="min-w-0 flex-1 sm:flex-none">
             <TabsList aria-label="Show">
               <TabsTrigger value="all">
@@ -322,11 +382,11 @@ export function Board({
           </Tabs>
           {view !== "open" && shelves.length > 1 ? (
             <Select value={shelfFilter} onValueChange={setShelfFilter}>
-              <SelectTrigger aria-label="Shelf" className="w-full sm:w-48">
+              <SelectTrigger aria-label="Shelf" className="max-sm:w-full sm:ml-auto sm:min-w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent position="popper" align="end">
-                <SelectItem value="any">All shelves</SelectItem>
+                <SelectItem value="any">Every shelf</SelectItem>
                 {shelves.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name}
@@ -336,10 +396,22 @@ export function Board({
             </Select>
           ) : null}
         </div>
+        <SmartFilters
+          flagCounts={counts2.flags}
+          flagTotals={allCounts.flags}
+          flags={flags}
+          onFlag={toggleFlag}
+          categories={smart}
+          categoryCounts={counts2.categories}
+          selected={cats}
+          onCategory={toggleCat}
+          onAdd={onNewCategory}
+          onClear={clearSmart}
+        />
       </div>
 
       {view !== "saved" && !query && (twins.length > 0 || dusty.length > 0) ? (
-        <div className="pix-s [--pc:var(--brand-soft)] mx-1 mt-1 mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5 text-sm text-ink">
+        <div className={`pix-s [--pc:var(--brand-soft)] mx-1 mt-1 mb-2 flex ${showRail ? "xl:hidden" : ""} flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5 text-sm text-ink`}>
           <span className="min-w-0 flex-1">
             {twins.length > 0
               ? `${twins.length} ${twins.length === 1 ? "tab is" : "tabs are"} open twice.`
@@ -353,7 +425,7 @@ export function Board({
 
       <div ref={listRef} onKeyDown={onListKey} aria-live="polite" className="px-1">
         {sections.length === 0 ? (
-          <Empty query={query} view={view} hasOpen={openItems.length > 0} onSave={onOpenSave} onClear={() => setQuery("")} />
+          <Empty query={query} narrowed={narrowed} view={view} hasOpen={openItems.length > 0} onSave={onOpenSave} onClear={() => { setQuery(""); clearSmart() }} />
         ) : (
           sections.map((section) => (
             <section key={section.id} className="mt-6 first:mt-2" aria-label={section.title}>
@@ -370,6 +442,7 @@ export function Board({
                   <ShelfMenu
                     shelf={section.shelf}
                     onOpenWindow={() => openUrls(section.items.map((i) => i.url), { newWindow: true })}
+                    onCopy={() => copyShelf(section.shelf!.name, section.items)}
                     onRename={() => setRenaming(section.shelf!)}
                     onPin={() => togglePin(section.shelf!.id)}
                     onDelete={() => deleteShelf(section.shelf!)}
@@ -381,7 +454,7 @@ export function Board({
               ) : (
                 <ul className="flex flex-col gap-0.5">
                   {section.items.map((it) => (
-                    <Row key={it.key} item={it} shelves={shelves} now={now} actions={actions} animate={animateRows} compact={compact} />
+                    <Row key={it.key} item={it} shelves={shelves} now={now} actions={actions} animate={animateRows} compact={compact} fileOptions={fileOptions} ruled={!!prefs.categoryRules[it.host]} />
                   ))}
                 </ul>
               )}
@@ -403,6 +476,25 @@ export function Board({
           setRenaming(null)
         }}
       />
+      </div>
+
+      {showRail ? (
+        <aside className="sticky top-0 hidden max-h-dvh w-72 shrink-0 self-start overflow-y-auto pt-8 pb-8 [scrollbar-width:none] xl:block" aria-label="Insights">
+          <Insights
+            twins={twins.length}
+            kept={allCounts.flags.kept}
+            dusty={dusty.length}
+            staleDays={prefs.staleDays}
+            onCloseTwins={closeTwins}
+            onCloseKept={closeKept}
+            onSnooze={snoozeDusty}
+            categories={smart}
+            selected={cats}
+            onCategory={toggleCat}
+            tidy={pipMood === "happy"}
+          />
+        </aside>
+      ) : null}
     </div>
   )
 }
@@ -420,12 +512,14 @@ function summaryLine(open: number, windows: number, saved: number) {
 function ShelfMenu({
   shelf,
   onOpenWindow,
+  onCopy,
   onRename,
   onPin,
   onDelete,
 }: {
   shelf: TabGroup
   onOpenWindow: () => void
+  onCopy: () => void
   onRename: () => void
   onPin: () => void
   onDelete: () => void
@@ -442,6 +536,9 @@ function ShelfMenu({
         <DropdownMenuItem onSelect={onOpenWindow} disabled={!shelf.tabs.length}>
           Open all in new window
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onCopy} disabled={!shelf.tabs.length}>
+          Copy as a list
+        </DropdownMenuItem>
         {!isLater ? <DropdownMenuItem onSelect={onRename}>Rename</DropdownMenuItem> : null}
         {!isLater ? <DropdownMenuItem onSelect={onPin}>{shelf.pinned ? "Unpin" : "Pin to top"}</DropdownMenuItem> : null}
         <DropdownMenuSeparator />
@@ -455,27 +552,29 @@ function ShelfMenu({
 
 function Empty({
   query,
+  narrowed,
   view,
   hasOpen,
   onSave,
   onClear,
 }: {
   query: string
+  narrowed: boolean
   view: View
   hasOpen: boolean
   onSave: () => void
   onClear: () => void
 }) {
-  const searching = !!query
+  const searching = !!query || narrowed
   return (
     <div className="flex flex-col items-center gap-3 py-16 text-center">
       <Pip mood={searching ? "surprised" : "sleepy"} size={64} />
       <p className="font-display text-lg text-ink">
-        {searching ? `Nothing matches “${query}”` : view === "open" ? "No tabs open" : "Nothing saved yet"}
+        {searching ? (query ? `Nothing matches “${query}”` : "Nothing matches those filters") : view === "open" ? "No tabs open" : "Nothing saved yet"}
       </p>
       {searching ? (
         <Button variant="secondary" size="sm" onClick={onClear}>
-          Clear search
+          {narrowed ? "Clear filters" : "Clear search"}
         </Button>
       ) : view !== "open" ? (
         <>
