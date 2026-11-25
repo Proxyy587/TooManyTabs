@@ -340,7 +340,7 @@ export function Board({
               ? `${twins.length} ${twins.length === 1 ? "tab is" : "tabs are"} open twice.`
               : `${dusty.length} ${dusty.length === 1 ? "tab hasn't" : "tabs haven't"} been looked at in days.`}
           </span>
-          <Button size="sm" variant="default" onClick={twins.length > 0 ? closeTwins : snoozeDusty}>
+          <Button size="sm" variant="secondary" className="bg-sunk hover:bg-raised" onClick={twins.length > 0 ? closeTwins : snoozeDusty}>
             {twins.length > 0 ? "Close extras" : "Snooze them"}
           </Button>
         </div>
