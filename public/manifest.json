@@ -18,9 +18,10 @@
     "service_worker": "background.js"
   },
   "icons": {
-    "16": "icon.svg",
-    "48": "icon.svg",
-    "128": "icon.svg"
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
   "oauth2": {
     "client_id": "INJECTED_FROM_ENV_AT_BUILD.apps.googleusercontent.com",
@@ -30,6 +31,10 @@
     ]
   },
   "action": {
-    "default_title": "TooManyTabs"
+    "default_title": "TooManyTabs",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
   }
 }
