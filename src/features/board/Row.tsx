@@ -113,7 +113,7 @@ export const Row = memo(function Row({
         className={`group pix-s [--pc:transparent] grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-2.5 outline-none hover:[--pc:var(--raised)] has-[[data-state=open]]:[--pc:var(--raised)] focus-visible:[--pc:var(--raised)] ${compact ? "py-1" : "py-2"}`}
       >
         <Favicon url={item.url} host={item.host} fallbackSrc={item.favIconUrl} small={compact} />
-        <div className="min-w-0">
+        <div className="min-w-0 overflow-hidden">
           <p className="flex min-w-0 items-baseline gap-2 leading-snug">
             <span className="truncate text-[15px] font-medium text-ink" title={item.title}>
               {item.title}

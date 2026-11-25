@@ -15,10 +15,10 @@ const INTERNAL = /^(chrome|chrome-extension|edge|brave|about|devtools|view-sourc
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     const contexts = ["page", "action"];
-    chrome.contextMenus.create({ id: "open", title: "Open TooManyTabs", contexts });
+    chrome.contextMenus.create({ id: "save-close-tab", title: "Save this tab and close it", contexts });
     chrome.contextMenus.create({ id: "save-tab", title: "Save this tab to Later", contexts });
-    chrome.contextMenus.create({ id: "save-window", title: "Save this window as a shelf", contexts });
-    chrome.contextMenus.create({ id: "save-close-window", title: "Save and close this window", contexts });
+    chrome.contextMenus.create({ id: "save-window", title: "Save all tabs", contexts });
+    chrome.contextMenus.create({ id: "save-close-window", title: "Save all tabs and close them", contexts });
   });
   chrome.alarms.create(SYNC_ALARM, { periodInMinutes: SYNC_INTERVAL_MINUTES });
   migrateLegacySessions()
@@ -39,8 +39,8 @@ chrome.action.onClicked.addListener(() => openShelf());
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   const run = {
-    open: () => openShelf(),
-    "save-tab": () => tab && saveTabToLater(tab),
+    "save-close-tab": () => tab && saveTabToLater(tab, { close: true }),
+    "save-tab": () => tab && saveTabToLater(tab, { close: false }),
     "save-window": () => tab && saveWindow(tab.windowId, { close: false }),
     "save-close-window": () => tab && saveWindow(tab.windowId, { close: true }),
   }[info.menuItemId];
@@ -135,7 +135,7 @@ function mutateGroups(fn) {
   return run;
 }
 
-async function saveTabToLater(tab) {
+async function saveTabToLater(tab, opts = {}) {
   if (!tab.url || INTERNAL.test(tab.url)) return;
   const now = new Date().toISOString();
   await mutateGroups((groups) => {
@@ -149,8 +149,14 @@ async function saveTabToLater(tab) {
     });
   });
   flashBadge("+1", "#1C1A27");
-  const { closeOnPark } = await chrome.storage.local.get("closeOnPark");
-  if (closeOnPark === true && tab.id != null) await chrome.tabs.remove(tab.id).catch(() => {});
+  let close = opts.close;
+  if (close === undefined) close = (await chrome.storage.local.get("closeOnPark")).closeOnPark === true;
+  if (close && tab.id != null) {
+    // closing a window's last tab would close the window, so open the shelf first
+    const siblings = await chrome.tabs.query({ windowId: tab.windowId });
+    if (siblings.length === 1) await openShelf();
+    await chrome.tabs.remove(tab.id).catch(() => {});
+  }
   pushSyncQueue().catch(recordSyncError);
 }
 

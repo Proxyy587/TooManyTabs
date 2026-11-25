@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { ArrowUpRight, Command as CommandIcon, MoreHorizontal, Search, Settings, X } from "lucide-react"
+import { ArrowUpRight, Command as CommandIcon, Github, MoreHorizontal, Search, Settings, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -315,6 +315,16 @@ export function Board({
             <span className="max-sm:hidden">{summary.long}</span>
           </p>
         </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="Open source on GitHub" asChild>
+              <a href="https://github.com/Proxyy587/TooManyTabs" target="_blank" rel="noreferrer">
+                <Github />
+              </a>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Open source on GitHub</TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon" aria-label="Command menu" onClick={onOpenPalette} className="max-sm:hidden">

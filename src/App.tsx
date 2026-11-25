@@ -145,6 +145,14 @@ export default function App() {
           prefs={prefs}
           onNewCategory={() => editCategory(null)}
         />
+        <a
+          href="https://abhijee.com"
+          target="_blank"
+          rel="noreferrer"
+          className="fixed right-4 bottom-3 z-10 text-[12px] text-ink-3 transition-colors hover:text-ink max-sm:hidden"
+        >
+          made by Abhijit · Proxy
+        </a>
       </main>
 
       <SaveDialog

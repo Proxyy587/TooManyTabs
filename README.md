@@ -66,4 +66,4 @@ TooManyTabs/
 └── server/               # Express + Drizzle + Neon
 ```
 
-by Abhijit
+by Abhijit (aka Proxy) · [abhijee.com](https://abhijee.com) · [GitHub](https://github.com/Proxyy587/TooManyTabs)

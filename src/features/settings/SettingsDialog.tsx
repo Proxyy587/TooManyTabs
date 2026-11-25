@@ -468,12 +468,26 @@ export function SettingsDialog({
                 <div>
                   <p className="font-display text-2xl text-ink">toomanytabs</p>
                   <p className="text-[13px] text-ink-2">
-                    Version {typeof chrome !== "undefined" && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : "dev"} · by Abhijit
+                    Version {typeof chrome !== "undefined" && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : "dev"} · by{" "}
+                    <a href="https://abhijee.com" target="_blank" rel="noreferrer" className="text-ink underline underline-offset-2">
+                      Abhijit (Proxy)
+                    </a>
                   </p>
                 </div>
               </div>
               <p className="text-[14px] text-ink-2">
                 Tabs, sorted. Every tab you have open or saved on one page that files itself. Your tabs stay on this device unless you sign in to sync. Pip is the little tab that keeps the others.
+              </p>
+              <p className="text-[14px] text-ink-2">
+                Open source on{" "}
+                <a href="https://github.com/Proxyy587/TooManyTabs" target="_blank" rel="noreferrer" className="text-ink underline underline-offset-2">
+                  GitHub
+                </a>
+                . Made by Abhijit, aka Proxy, at{" "}
+                <a href="https://abhijee.com" target="_blank" rel="noreferrer" className="text-ink underline underline-offset-2">
+                  abhijee.com
+                </a>
+                .
               </p>
               <p className="text-[13px] text-ink-3">
                 Fonts: Pixelify Sans and Atkinson Hyperlegible Next, both under the SIL Open Font License. Interface built on Radix and
