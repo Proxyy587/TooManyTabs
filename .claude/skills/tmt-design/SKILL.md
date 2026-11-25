@@ -1,70 +1,70 @@
 ---
 name: tmt-design
-description: TooManyTabs brand, component and motion rules (tonal neutrals, ink pill primary, Pip the pixel mascot, Pixelify Sans + Atkinson Hyperlegible Next, shadcn/ui restyled). Use whenever you add or change anything visible in src/, write UI copy, or review a screenshot of the extension.
+description: TooManyTabs brand, component and motion rules (six themeable palettes, stair-step pixel surfaces, ink primary with a lip, Pip the pixel mascot and sprites, Pixelify Sans + Atkinson Hyperlegible Next, shadcn/ui restyled). Use whenever you add or change anything visible in src/, write UI copy, or review a screenshot of the extension.
 ---
 
 # TooManyTabs design rules
 Full rationale is in `docs/BRAND.md`. This is the checklist.
 
 ## The one idea
-A calm, plain list of your tabs, with one pixel moment: **Pip**, the little yellow tab carrying a blue tab. Everything else is quiet.
+A little pixel world for your tabs. Pip lives in it, the user picks the weather (a palette), and the page is stair-stepped tones, chunky buttons and tiny sprites. Playful, never noisy: one primary button, readable rows, nothing looping.
 
 ## Colour (tokens in `src/index.css`; never hard-code hex in components)
-- **Surfaces are tones:** `ground` → `raised` → `raised-2`. Popovers and dialogs are `popover` with `--shadow-float`. No borders except a 1px `border` between a dialog's list and its footer.
-- **Text:** `ink`, `ink-2` (≈68%) and `ink-3` (≈56%) only.
-- **Primary action:** the ink pill (`<Button>` default). One per view: "Save tabs" on the page, the confirm button in a dialog.
-- **Secondary:** `variant="secondary"` (tonal pill) or `ghost` for icon buttons.
-- **Brand accents:**
-  - `pip` yellow is for Pip, text selection, avatars and the suggestion banner (`pip-soft`);
-  - `tab-blue` is for focus, switches that are on and links.
-  - Neither is ever a large fill.
+- **Six palettes × light/dark** via `data-palette` and `data-theme` on `<html>`. Add or change a palette in `src/index.css` AND `src/lib/palettes.ts`; `tests/palettes.test.ts` fails if they drift.
+- **Surfaces are tones:** `ground` → `panel` (cards) → `panel-hover` (row hover). Menus and dialogs are `float`. Fields and tracks are `raised` / `raised-2`.
+- **Text:** `ink`, `ink-2`, `ink-3` only.
+- **Primary action:** the ink block (`<Button>` default) with a `brand` lip. One per view.
+- **Secondary:** `variant="secondary"` (tonal) or `ghost` for icon buttons. `variant="brand"` only for a single "yes!" such as sign-in.
+- **`brand` is a fill** (selected nav, meter cells, chips, Pip's banner, the lip). Put `on-brand` text on it; never colour text with `brand`. `link` is for focus and links.
+- **Pip is always yellow**, whatever the palette.
 - **Danger** is only for destructive menu items and errors.
 
+## Pixel shapes
+- Surfaces get stair-step corners from `.pix` (4px), `.pix-m` (3px) or `.pix-s` (2px). Set the colour with `[--pc:var(--raised)]`, and hover/active colours with `hover:[--pc:...]`. There is no `rounded-*` and no border.
+- The notch sticks out by its size, so sibling gaps must be larger than that.
+- Floating things add `pix-float`; cards add `pix-card`. Buttons use `pix-btn` (lip) or `pix-flat` (ghost).
+- Focus is drawn by an unlayered rule in `index.css`; don't add `outline-none` expecting it to win, and don't remove the rule.
+- Sprites come from `Sprite` (`src/components/brand/Sprite.tsx`). Use the one-colour `nav*` sprites as icons; add new art as a text grid there, in theme colours only.
+
 ## Type
-- **Display:** Pixelify Sans (`font-display`). Only for the wordmark `toomanytabs`, empty-state headlines and Pip-adjacent moments. Never for body text, buttons or rows.
+- **Display:** Pixelify Sans (`font-display`, or `px-title` for page titles with the drop). For the wordmark, page and section titles, settings pane titles, the meter mood and empty-state headlines. Never body text, buttons or row titles.
 - **UI:** Atkinson Hyperlegible Next. Body 15 px, meta 13 px, three weights (400/500/600).
 - **Copy:**
-  - sentence case;
+  - sentence case; the brand and pixel headings are lowercase;
   - a button says what happens ("Save 12 tabs", "Close extras");
   - a toast echoes it ("Saved 12 tabs to Later");
   - errors say what to do next.
-  - The brand name in the UI is lowercase `toomanytabs`; in prose it's TooManyTabs.
-
-## Shape
-- Radius: 6 (thumbs), 8 (small controls), 12 (rows, cards, inputs), 14 (menus, dialogs).
-- Buttons, selects, tab tracks and toasts are capsules (`rounded-full`).
 
 ## Components (shadcn/ui in `src/components/ui`, already restyled)
-- Use `Button`, `Input`, `Dialog`, `DropdownMenu`, `Select`, `Tabs` (also the segmented control), `Switch`, `Tooltip`, `CommandDialog` and `sonner` toasts.
+- Use `Button`, `Input`, `Dialog`, `DropdownMenu`, `Select`, `Tabs` (also the segmented control and the settings side nav), `Switch`, `Tooltip`, `CommandDialog` and `sonner` toasts.
 - Don't hand-roll menus, popovers or modals.
+- **Layout:** from `lg` a 288px `Sidebar` plus a main column (max 920px); below it one column with a header and the segmented view switch. Shelves are `pix-card` sections.
 - **Row anatomy (`features/board/Row.tsx`):**
-  - favicon tile · title (once) · domain (once) + at most one quiet fact;
-  - actions sit in their own grid column;
-  - with a mouse they show on hover/focus; on touch they always show.
-  - Never position menus absolutely inside a row.
-- **Filters:** All / Open now / Saved, plus the shelf `Select` and search. Don't add chip rows. Category UI is parked until AI filters.
+  - favicon tile · title (once) · domain (once) + at most one fact;
+  - notable facts ("open twice", "playing", "current tab") are chips; the rest is quiet text;
+  - actions sit in their own grid column; with a mouse they show on hover/focus; on touch they always show;
+  - never position menus absolutely inside a row.
+- **Navigation:** All / Open now / Saved plus one entry per shelf. No chip rows.
 
-## Motion (one per kind; classes in `src/index.css`)
-| Kind | Class | Feel |
-|---|---|---|
-| list rows (first paint only) | `.row-in` | 180 ms fade + 4 px rise |
-| menus, selects | `.menu-motion` | 120 ms grow from the trigger, 2 px blur |
-| dialogs | `.dialog-motion` / `.scrim-motion` | 240 ms rise 6 px from 98.5%; leave with a 120 ms fade |
-| press | `.press` | 0.97 down in 120 ms, back with slight overshoot |
-| Pip success | `.pip-hop` | a single 240 ms hop |
+## Motion
+| Kind | Feel |
+|---|---|
+| list rows (first paint only) | `.row-in` 180 ms fade + 4 px rise |
+| menus, selects | `.menu-motion` 120 ms grow |
+| dialogs | `.dialog-motion` / `.scrim-motion` 240 ms rise; 120 ms fade out |
+| buttons | drop 2 px on press, in whole pixels |
+| switch thumb, Pip hop | stepped (`steps(4)`), like a sprite |
 
-- Ease is `cubic-bezier(0.22, 1, 0.36, 1)`.
+- Ease is `cubic-bezier(0.22, 1, 0.36, 1)` for anything not stepped.
 - Nothing loops at rest. The spinner only runs while syncing.
 - `prefers-reduced-motion` keeps fades only.
 - No motion library: CSS covers it.
 
 ## Responsive
-- It works from 360 px to wide: one centred column, `max-w-3xl`.
-- Settings becomes full-screen below `sm`.
-- The header drops the ⌘ button and shortens the summary below `sm`.
-- Check by screenshot at 400 px and 1400 px, light and dark.
+- Works from 360 px to wide. Settings becomes full-screen below `sm` with a scrolling tab row.
+- Check by screenshot at 400 px and 1400 px, light and dark, in at least two palettes.
 
 ## Accessibility
-- Visible focus (`--focus` ring), a label on every icon button, tooltips on icon actions, dialogs titled.
+- Visible focus on everything (see Pixel shapes), a label on every icon button, tooltips on icon actions, dialogs titled.
 - Rows are keyboard-reachable (`data-row`, j/k/arrows).
-- Contrast: `ink-3` on `ground` is the floor for text; don't go lighter.
+- Contrast: `ink-3` on `ground` is the floor for text; don't go lighter. Check any new palette in both modes.

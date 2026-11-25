@@ -17,7 +17,7 @@ All runtime npm dependencies are MIT licensed: React, React DOM, Radix UI primit
 
 ## Artwork
 
-Pip (the mascot), the category sprites and all icons are original pixel art made for this project (`src/brand/pip.json`, `src/components/brand/sprites.ts`). They are covered by the project's MIT licence.
+Pip (the mascot), the category sprites and all icons are original pixel art made for this project (`src/brand/pip.json`, `src/components/brand/Sprite.tsx`). They are covered by the project's MIT licence.
 
 ## Inspiration (no code or assets used)
 
